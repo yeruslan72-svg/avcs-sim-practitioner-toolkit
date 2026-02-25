@@ -6,6 +6,16 @@ import base64
 from datetime import datetime
 
 # ------------------------------
+# Конфигурация страницы — САМАЯ ПЕРВАЯ
+# ------------------------------
+st.set_page_config(
+    page_title="AVCS SIM - Practitioner Toolkit",
+    page_icon="🧭",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# ------------------------------
 # Импорт модулей
 # ------------------------------
 from modules.auth import check_authentication
@@ -33,16 +43,6 @@ if authentication_status == False:
 if authentication_status == None:
     st.warning("Please enter your credentials")
     st.stop()
-
-# ------------------------------
-# Конфигурация страницы
-# ------------------------------
-st.set_page_config(
-    page_title="AVCS SIM - Practitioner Toolkit",
-    page_icon="🧭",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
 
 # ------------------------------
 # Инициализация состояния
@@ -411,12 +411,18 @@ elif st.session_state.view_mode == 'new':
         </div>
         """, unsafe_allow_html=True)
         with st.form("trigger_form"):
-            q1 = st.radio("Are critical deviation thresholds mandatory and enforced, or discretionary?",
-                ["Yes, mandatory and enforced","Yes, but discretionary","No clear thresholds"], key='q1_1')
-            q2 = st.radio("Can deviations exist without crossing formal limits?",
-                ["No, all deviations tracked","Sometimes noticed","Yes, often unnoticed"], key='q1_2')
-            q3 = st.radio("Is escalation automatic or requires human decision?",
-                ["Automatic","Requires decision","Often doesn't happen"], key='q1_3')
+            q1 = st.radio(
+                "Are critical deviation thresholds mandatory and enforced, or discretionary?",
+                ["Yes, mandatory and enforced","Yes, but discretionary","No clear thresholds"], key='q1_1'
+            )
+            q2 = st.radio(
+                "Can deviations exist without crossing formal limits?",
+                ["No, all deviations tracked","Sometimes noticed","Yes, often unnoticed"], key='q1_2'
+            )
+            q3 = st.radio(
+                "Is escalation automatic or requires human decision?",
+                ["Automatic","Requires decision","Often doesn't happen"], key='q1_3'
+            )
             if st.form_submit_button("Next →"):
                 st.session_state.answers.update(st.session_state)
                 st.session_state.scores['trigger_clarity'] = calculate_trigger_score(st.session_state.answers)
@@ -431,12 +437,18 @@ elif st.session_state.view_mode == 'new':
         </div>
         """, unsafe_allow_html=True)
         with st.form("ownership_form"):
-            q1 = st.radio("Is a single accountable owner defined for critical decisions?",
-                ["Yes, singular owner defined","Shared but clear","Collective/unclear"], key='q2_1')
-            q2 = st.radio("Is the owner operationally present during risk exposure?",
-                ["Yes, always present","Usually present","Rarely present"], key='q2_2')
-            q3 = st.radio("Can ownership be overridden collectively without traceability?",
-                ["No, never","Sometimes","Yes, commonly"], key='q2_3')
+            q1 = st.radio(
+                "Is a single accountable owner defined for critical decisions?",
+                ["Yes, singular owner defined","Shared but clear","Collective/unclear"], key='q2_1'
+            )
+            q2 = st.radio(
+                "Is the owner operationally present during risk exposure?",
+                ["Yes, always present","Usually present","Rarely present"], key='q2_2'
+            )
+            q3 = st.radio(
+                "Can ownership be overridden collectively without traceability?",
+                ["No, never","Sometimes","Yes, commonly"], key='q2_3'
+            )
             if st.form_submit_button("Next →"):
                 st.session_state.answers.update(st.session_state)
                 st.session_state.scores['decision_ownership'] = calculate_ownership_score(st.session_state.answers)
@@ -451,12 +463,18 @@ elif st.session_state.view_mode == 'new':
         </div>
         """, unsafe_allow_html=True)
         with st.form("intervention_form"):
-            q1 = st.radio("Is stop-work authority formally codified and protected?",
-                ["Yes, formally codified and protected","Yes, but informally","No"], key='q3_1')
-            q2 = st.radio("How are stop-work decisions reviewed?",
-                ["Always supported","Usually supported","Questioned/criticized"], key='q3_2')
-            q3 = st.radio("Does stopping operations negatively affect performance metrics?",
-                ["No, never","Sometimes","Yes, often"], key='q3_3')
+            q1 = st.radio(
+                "Is stop-work authority formally codified and protected?",
+                ["Yes, formally codified and protected","Yes, but informally","No"], key='q3_1'
+            )
+            q2 = st.radio(
+                "How are stop-work decisions reviewed?",
+                ["Always supported","Usually supported","Questioned/criticized"], key='q3_2'
+            )
+            q3 = st.radio(
+                "Does stopping operations negatively affect performance metrics?",
+                ["No, never","Sometimes","Yes, often"], key='q3_3'
+            )
             if st.form_submit_button("Next →"):
                 st.session_state.answers.update(st.session_state)
                 st.session_state.scores['protected_intervention'] = calculate_intervention_score(st.session_state.answers)
@@ -471,12 +489,18 @@ elif st.session_state.view_mode == 'new':
         </div>
         """, unsafe_allow_html=True)
         with st.form("override_form"):
-            q1 = st.radio("Can procedures be bypassed informally without documentation?",
-                ["No, always documented","Sometimes documented","Yes, commonly"], key='q4_1')
-            q2 = st.radio("Are overrides traceable to a named decision-maker?",
-                ["Yes, always","Sometimes","Rarely"], key='q4_2')
-            q3 = st.radio("Are overrides reviewed periodically?",
-                ["Yes, regularly","Occasionally","Never"], key='q4_3')
+            q1 = st.radio(
+                "Can procedures be bypassed informally without documentation?",
+                ["No, always documented","Sometimes documented","Yes, commonly"], key='q4_1'
+            )
+            q2 = st.radio(
+                "Are overrides traceable to a named decision-maker?",
+                ["Yes, always","Sometimes","Rarely"], key='q4_2'
+            )
+            q3 = st.radio(
+                "Are overrides reviewed periodically?",
+                ["Yes, regularly","Occasionally","Never"], key='q4_3'
+            )
             if st.form_submit_button("Next →"):
                 st.session_state.answers.update(st.session_state)
                 st.session_state.scores['override_transparency'] = calculate_override_score(st.session_state.answers)
@@ -491,12 +515,18 @@ elif st.session_state.view_mode == 'new':
         </div>
         """, unsafe_allow_html=True)
         with st.form("drift_form"):
-            q1 = st.radio("Are minor deviations recorded systematically?",
-                ["Yes, systematically","Sometimes","Rarely"], key='q5_1')
-            q2 = st.radio("Is deviation trend analyzed longitudinally?",
-                ["Yes, regularly","Occasionally","Never"], key='q5_2')
-            q3 = st.radio("Is normalization of deviation actively monitored?",
-                ["Yes, actively","Sometimes","No"], key='q5_3')
+            q1 = st.radio(
+                "Are minor deviations recorded systematically?",
+                ["Yes, systematically","Sometimes","Rarely"], key='q5_1'
+            )
+            q2 = st.radio(
+                "Is deviation trend analyzed longitudinally?",
+                ["Yes, regularly","Occasionally","Never"], key='q5_2'
+            )
+            q3 = st.radio(
+                "Is normalization of deviation actively monitored?",
+                ["Yes, actively","Sometimes","No"], key='q5_3'
+            )
             if st.form_submit_button("Calculate Results →"):
                 st.session_state.answers.update(st.session_state)
                 st.session_state.scores['drift_detection'] = calculate_drift_score(st.session_state.answers)
