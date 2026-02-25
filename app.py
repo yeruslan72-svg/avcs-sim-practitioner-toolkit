@@ -6,10 +6,28 @@ import base64
 from datetime import datetime
 
 # ------------------------------
+# Импорт модуля аутентификации
+# ------------------------------
+from modules.auth import check_authentication
+
+# ------------------------------
+# Проверка аутентификации
+# ------------------------------
+name, authentication_status, username, authenticator = check_authentication()
+
+if authentication_status == False:
+    st.error("Username/password is incorrect")
+    st.stop()
+
+if authentication_status == None:
+    st.warning("Please enter your credentials")
+    st.stop()
+
+# ------------------------------
 # Конфигурация страницы
 # ------------------------------
 st.set_page_config(
-    page_title="AVCS Structural Integrity Module",
+    page_title="AVCS Structural Integrity Module - Practitioner Toolkit",
     page_icon="🧭",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -91,12 +109,23 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ------------------------------
+# Приветствие пользователя в сайдбаре
+# ------------------------------
+with st.sidebar:
+    st.image("logo.png", width=200)
+    st.markdown(f"**Welcome, {name}!**")
+    if authenticator:
+        authenticator.logout('Logout', 'main')
+    st.markdown("---")
+    # Остальной код сайдбара будет добавляться по мере разработки
+
+# ------------------------------
 # Заголовок
 # ------------------------------
 st.markdown("""
 <div class="main-header">
     <h1>🧭 AVCS Structural Integrity Module</h1>
-    <p>Diagnosing decision architecture before failure, not after</p>
+    <p>Practitioner Toolkit — for certified AVCS Practitioners only</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -120,7 +149,6 @@ if 'answers' not in st.session_state:
 # Боковая панель с прогрессом
 # ------------------------------
 with st.sidebar:
-    st.image("logo.png", width=200)
     st.markdown("## Progress")
     progress = (st.session_state.step - 1) / 6
     st.progress(progress)
@@ -246,6 +274,11 @@ def create_pdf(scores, total_score):
     pdf.set_font('Arial', '', 10)
     pdf.cell(0, 10, f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")}', 0, 1, 'R')
     pdf.ln(10)
+    
+    # Информация о практикующем специалисте
+    pdf.set_font('Arial', 'I', 10)
+    pdf.cell(0, 10, f'Certified AVCS Practitioner: {name}', 0, 1, 'L')
+    pdf.ln(5)
     
     # Общий скор
     pdf.set_font('Arial', 'B', 12)
