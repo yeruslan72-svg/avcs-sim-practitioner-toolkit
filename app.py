@@ -6,9 +6,13 @@ import base64
 from datetime import datetime
 
 # ------------------------------
-# Импорт модуля аутентификации
+# Импорт модулей
 # ------------------------------
 from modules.auth import check_authentication
+from modules.interview_manager import (
+    init_interview_state, add_respondent, update_respondent, delete_respondent,
+    get_aggregated_scores, get_consensus_score, get_disagreement_areas
+)
 
 # ------------------------------
 # Проверка аутентификации
@@ -34,104 +38,10 @@ st.set_page_config(
 )
 
 # ------------------------------
-# Стили CSS (исправлено: rem → px)
+# Инициализация состояния
 # ------------------------------
-st.markdown("""
-<style>
-    .stApp {
-        background-color: #f8f9fa;
-    }
-    .main-header {
-        text-align: center;
-        padding: 20px 0;
-        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
-        color: white;
-        border-radius: 10px;
-        margin-bottom: 20px;
-    }
-    .main-header h1 {
-        font-size: 32px;
-        margin-bottom: 10px;
-    }
-    .main-header p {
-        font-size: 18px;
-    }
-    .pillar-card {
-        background-color: white;
-        color: #000000;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        margin-bottom: 15px;
-        border-left: 4px solid #1e3a8a;
-    }
-    .pillar-card h2 {
-        color: #1e3a8a;
-        margin-top: 0;
-        margin-bottom: 10px;
-    }
-    .pillar-card p {
-        color: #4b5563;
-        margin-bottom: 0;
-    }
-    .score-box {
-        background-color: #1e3a8a;
-        color: white;
-        padding: 20px;
-        border-radius: 10px;
-        text-align: center;
-        font-size: 48px;
-        font-weight: bold;
-        margin: 15px 0;
-    }
-    .stButton button {
-        background-color: #1e3a8a;
-        color: white;
-        font-weight: bold;
-        border-radius: 5px;
-        padding: 8px 20px;
-        border: none;
-    }
-    .stButton button:hover {
-        background-color: #3b82f6;
-    }
-    .stRadio label {
-        color: #000000 !important;
-        font-size: 16px;
-    }
-    .stRadio div {
-        color: #000000 !important;
-    }
-    .stMarkdown {
-        color: #000000;
-    }
-</style>
-""", unsafe_allow_html=True)
+init_interview_state()
 
-# ------------------------------
-# Приветствие пользователя в сайдбаре
-# ------------------------------
-with st.sidebar:
-    st.image("logo.png", width=200)
-    st.markdown(f"**Welcome, {name}!**")
-    if authenticator:
-        authenticator.logout('Logout', 'main')
-    st.markdown("---")
-    # Остальной код сайдбара будет добавляться по мере разработки
-
-# ------------------------------
-# Заголовок
-# ------------------------------
-st.markdown("""
-<div class="main-header">
-    <h1>🧭 AVCS Structural Integrity Module</h1>
-    <p>Practitioner Toolkit — for certified AVCS Practitioners only</p>
-</div>
-""", unsafe_allow_html=True)
-
-# ------------------------------
-# Инициализация состояния сессии
-# ------------------------------
 if 'step' not in st.session_state:
     st.session_state.step = 1
 if 'scores' not in st.session_state:
@@ -146,37 +56,84 @@ if 'answers' not in st.session_state:
     st.session_state.answers = {}
 
 # ------------------------------
-# Боковая панель с прогрессом
+# Стили CSS
+# ------------------------------
+st.markdown("""
+<style>
+    .stApp { background-color: #f8f9fa; }
+    .main-header {
+        text-align: center; padding: 20px 0;
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        color: white; border-radius: 10px; margin-bottom: 20px;
+    }
+    .pillar-card {
+        background-color: white; color: #000000; padding: 20px;
+        border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 15px; border-left: 4px solid #1e3a8a;
+    }
+    .score-box {
+        background-color: #1e3a8a; color: white; padding: 20px;
+        border-radius: 10px; text-align: center; font-size: 48px;
+        font-weight: bold; margin: 15px 0;
+    }
+    .respondent-card {
+        background-color: #f0f2f6; padding: 15px; border-radius: 10px;
+        margin-bottom: 10px; border-left: 4px solid #3b82f6;
+    }
+    .stButton button { background-color: #1e3a8a; color: white; }
+</style>
+""", unsafe_allow_html=True)
+
+# ------------------------------
+# Боковая панель
 # ------------------------------
 with st.sidebar:
+    st.image("logo.png", width=200)
+    st.markdown(f"**Welcome, {name}!**")
+    if authenticator:
+        authenticator.logout('Logout', 'main')
+    
+    st.markdown("---")
+    st.markdown(f"**Respondents:** {len(st.session_state.respondents)}")
+    
+    if st.session_state.respondents:
+        st.markdown("### Respondent List")
+        for i, resp in enumerate(st.session_state.respondents):
+            with st.expander(f"{resp['role']}: {resp['name']}"):
+                st.write(f"Trigger: {resp['scores']['trigger_clarity']}/5")
+                st.write(f"Ownership: {resp['scores']['decision_ownership']}/5")
+                st.write(f"Intervention: {resp['scores']['protected_intervention']}/5")
+                st.write(f"Override: {resp['scores']['override_transparency']}/5")
+                st.write(f"Drift: {resp['scores']['drift_detection']}/5")
+                if st.button(f"Delete", key=f"del_{i}"):
+                    delete_respondent(i)
+                    st.rerun()
+    
+    st.markdown("---")
     st.markdown("## Progress")
     progress = (st.session_state.step - 1) / 6
     st.progress(progress)
     st.markdown(f"**Step {st.session_state.step} of 6**")
-    
-    if st.session_state.step > 1:
-        st.markdown("---")
-        st.markdown("### Current Scores")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Trigger", st.session_state.scores['trigger_clarity'])
-            st.metric("Ownership", st.session_state.scores['decision_ownership'])
-            st.metric("Intervention", st.session_state.scores['protected_intervention'])
-        with col2:
-            st.metric("Override", st.session_state.scores['override_transparency'])
-            st.metric("Drift", st.session_state.scores['drift_detection'])
 
 # ------------------------------
-# Функции для расчёта скоров
+# Заголовок
+# ------------------------------
+st.markdown("""
+<div class="main-header">
+    <h1>🧭 AVCS Structural Integrity Module</h1>
+    <p>Practitioner Toolkit — Multi‑interview mode</p>
+</div>
+""", unsafe_allow_html=True)
+
+# ------------------------------
+# Функции расчёта (без изменений)
 # ------------------------------
 def calculate_trigger_score(answers):
     score = 0
     if answers.get('q1_1') == "Yes, mandatory and enforced": score += 2
     elif answers.get('q1_1') == "Yes, but discretionary": score += 1
-    
     if answers.get('q1_2') == "No, all deviations tracked": score += 2
     elif answers.get('q1_2') == "Sometimes noticed": score += 1
-    
     if answers.get('q1_3') == "Automatic": score += 1
     return min(score, 5)
 
@@ -184,10 +141,8 @@ def calculate_ownership_score(answers):
     score = 0
     if answers.get('q2_1') == "Yes, singular owner defined": score += 2
     elif answers.get('q2_1') == "Shared but clear": score += 1
-    
     if answers.get('q2_2') == "Yes, always present": score += 2
     elif answers.get('q2_2') == "Usually present": score += 1
-    
     if answers.get('q2_3') == "No, never": score += 1
     return min(score, 5)
 
@@ -195,10 +150,8 @@ def calculate_intervention_score(answers):
     score = 0
     if answers.get('q3_1') == "Yes, formally codified and protected": score += 2
     elif answers.get('q3_1') == "Yes, but informally": score += 1
-    
     if answers.get('q3_2') == "Always supported": score += 2
     elif answers.get('q3_2') == "Usually supported": score += 1
-    
     if answers.get('q3_3') == "No, never": score += 1
     return min(score, 5)
 
@@ -206,10 +159,8 @@ def calculate_override_score(answers):
     score = 0
     if answers.get('q4_1') == "No, always documented": score += 2
     elif answers.get('q4_1') == "Sometimes documented": score += 1
-    
     if answers.get('q4_2') == "Yes, always": score += 2
     elif answers.get('q4_2') == "Sometimes": score += 1
-    
     if answers.get('q4_3') == "Yes, regularly": score += 1
     return min(score, 5)
 
@@ -217,92 +168,59 @@ def calculate_drift_score(answers):
     score = 0
     if answers.get('q5_1') == "Yes, systematically": score += 2
     elif answers.get('q5_1') == "Sometimes": score += 1
-    
     if answers.get('q5_2') == "Yes, regularly": score += 2
     elif answers.get('q5_2') == "Occasionally": score += 1
-    
     if answers.get('q5_3') == "Yes, actively": score += 1
     return min(score, 5)
 
 # ------------------------------
-# Функция для создания радар-графика
+# Функция для радара
 # ------------------------------
-def create_radar_chart(scores):
-    categories = ['Trigger Clarity', 'Decision Ownership', 'Protected Intervention', 
+def create_radar_chart(scores_dict):
+    categories = ['Trigger Clarity', 'Decision Ownership', 'Protected Intervention',
                   'Override Transparency', 'Drift Detection']
-    values = [
-        scores['trigger_clarity'],
-        scores['decision_ownership'],
-        scores['protected_intervention'],
-        scores['override_transparency'],
-        scores['drift_detection']
-    ]
-    
+    values = [scores_dict[p] for p in ['trigger_clarity','decision_ownership',
+                                        'protected_intervention','override_transparency',
+                                        'drift_detection']]
     fig = go.Figure(data=go.Scatterpolar(
         r=values + [values[0]],
         theta=categories + [categories[0]],
-        fill='toself',
-        line_color='#1e3a8a',
-        fillcolor='rgba(30, 58, 138, 0.3)'
+        fill='toself', line_color='#1e3a8a',
+        fillcolor='rgba(30,58,138,0.3)'
     ))
-    
     fig.update_layout(
-        polar=dict(
-            radialaxis=dict(
-                visible=True,
-                range=[0, 5]
-            )),
-        showlegend=False,
-        height=400,
+        polar=dict(radialaxis=dict(visible=True, range=[0,5])),
+        showlegend=False, height=400,
         margin=dict(l=80, r=80, t=20, b=20)
     )
     return fig
 
 # ------------------------------
-# Функция для создания PDF-отчёта
+# Функция для PDF
 # ------------------------------
 def create_pdf(scores, total_score):
     pdf = FPDF()
     pdf.add_page()
-    
-    # Заголовок
-    pdf.set_font('Arial', 'B', 16)
-    pdf.cell(0, 10, 'AVCS Structural Integrity Module Report', 0, 1, 'C')
+    pdf.set_font('Arial','B',16)
+    pdf.cell(0,10,'AVCS Structural Integrity Module Report',0,1,'C')
     pdf.ln(10)
-    
-    # Дата
-    pdf.set_font('Arial', '', 10)
-    pdf.cell(0, 10, f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")}', 0, 1, 'R')
-    pdf.ln(10)
-    
-    # Информация о практикующем специалисте
-    pdf.set_font('Arial', 'I', 10)
-    pdf.cell(0, 10, f'Certified AVCS Practitioner: {name}', 0, 1, 'L')
+    pdf.set_font('Arial','',10)
+    pdf.cell(0,10,f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")}',0,1,'R')
     pdf.ln(5)
-    
-    # Общий скор
-    pdf.set_font('Arial', 'B', 12)
-    pdf.cell(0, 10, f'Total Structural Integrity Score: {total_score} / 25', 0, 1)
-    
-    # Классификация
-    if total_score <= 10:
-        classification = "HIGH STRUCTURAL VULNERABILITY"
-    elif total_score <= 17:
-        classification = "CONDITIONAL STABILITY"
-    elif total_score <= 22:
-        classification = "STRUCTURALLY CONTROLLED"
-    else:
-        classification = "ARCHITECTURALLY RESILIENT"
-    
-    pdf.set_font('Arial', 'B', 12)
-    pdf.cell(0, 10, f'Classification: {classification}', 0, 1)
+    pdf.set_font('Arial','I',10)
+    pdf.cell(0,10,f'Certified AVCS Practitioner: {name}',0,1,'L')
+    pdf.ln(5)
+    pdf.set_font('Arial','B',12)
+    pdf.cell(0,10,f'Total Structural Integrity Score: {total_score} / 25',0,1)
+    if total_score <= 10: cls = "HIGH STRUCTURAL VULNERABILITY"
+    elif total_score <= 17: cls = "CONDITIONAL STABILITY"
+    elif total_score <= 22: cls = "STRUCTURALLY CONTROLLED"
+    else: cls = "ARCHITECTURALLY RESILIENT"
+    pdf.cell(0,10,f'Classification: {cls}',0,1)
     pdf.ln(10)
-    
-    # Детальные скоры
-    pdf.set_font('Arial', 'B', 12)
-    pdf.cell(0, 10, 'Pillar Scores:', 0, 1)
-    pdf.set_font('Arial', '', 12)
-    
+    pdf.set_font('Arial','B',12)
+    pdf.cell(0,10,'Pillar Scores:',0,1)
+    pdf.set_font('Arial','',12)
     pillars = [
         ('Trigger Clarity', scores['trigger_clarity']),
         ('Decision Ownership', scores['decision_ownership']),
@@ -310,48 +228,47 @@ def create_pdf(scores, total_score):
         ('Override Transparency', scores['override_transparency']),
         ('Drift Detection', scores['drift_detection'])
     ]
-    
-    for name, score in pillars:
-        pdf.cell(0, 10, f'{name}: {score}/5', 0, 1)
-    
-    # Сохраняем PDF в строку
+    for p,s in pillars:
+        pdf.cell(0,10,f'{p}: {s}/5',0,1)
     pdf_output = pdf.output(dest='S').encode('latin1')
     return base64.b64encode(pdf_output).decode('latin1')
 
 # ------------------------------
-# Основное приложение - по шагам
+# Основной интерфейс
 # ------------------------------
 
-# Шаг 1: Введение
-if st.session_state.step == 1:
-    st.markdown("""
-    <div style="background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-        <h2>Welcome to the AVCS Structural Integrity Module</h2>
-        <p style="font-size: 16px; line-height: 1.6;">
-        This diagnostic tool evaluates your organization's decision architecture across five critical pillars.
-        </p>
-        <p style="font-size: 16px; line-height: 1.6;">
-        <strong>Deepwater Horizon scored 3/25.</strong> Not because of engineering failure, 
-        but because structural decision weaknesses were embedded long before the explosion.
-        </p>
-        <p style="font-size: 16px; line-height: 1.6;">
-        The assessment takes 5-10 minutes. You'll receive:
-        </p>
-        <ul style="font-size: 16px; line-height: 1.8;">
-            <li>Structural Integrity Score (0-25)</li>
-            <li>Visual radar chart of your five pillars</li>
-            <li>PDF report with recommendations</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+# Если не в режиме редактирования и не на шаге опроса — показываем панель управления респондентами
+if not st.session_state.edit_mode and st.session_state.step == 1:
+    col1, col2 = st.columns([2,1])
+    with col1:
+        st.markdown("### Respondents")
+        if st.session_state.respondents:
+            for i, resp in enumerate(st.session_state.respondents):
+                with st.container():
+                    cols = st.columns([3,1,1])
+                    cols[0].markdown(f"**{resp['role']}:** {resp['name']}")
+                    cols[1].markdown(f"Score: {sum(resp['scores'].values())}/25")
+                    if cols[2].button("Edit", key=f"edit_{i}"):
+                        st.session_state.edit_mode = True
+                        st.session_state.edit_index = i
+                        st.session_state.step = 2
+                        st.rerun()
+        else:
+            st.info("No respondents yet. Add your first respondent below.")
     
-    col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
-        if st.button("Start Assessment →", use_container_width=True):
+        st.markdown("### Actions")
+        if st.button("➕ New Respondent", use_container_width=True):
+            st.session_state.edit_mode = False
             st.session_state.step = 2
             st.rerun()
+        
+        if st.session_state.respondents:
+            if st.button("📊 Show Aggregated Results", use_container_width=True):
+                st.session_state.step = 7
+                st.rerun()
 
-# Шаг 2: Trigger Clarity
+# Шаги 2–6: опрос респондента (код из предыдущей версии, почти без изменений)
 elif st.session_state.step == 2:
     st.markdown("""
     <div class="pillar-card">
@@ -359,37 +276,19 @@ elif st.session_state.step == 2:
         <p>Are escalation conditions mandatory or interpretive?</p>
     </div>
     """, unsafe_allow_html=True)
-    
     with st.form("trigger_form"):
-        q1 = st.radio(
-            "Are critical deviation thresholds mandatory and enforced, or discretionary?",
-            ["Yes, mandatory and enforced", "Yes, but discretionary", "No clear thresholds"],
-            key='q1_1'
-        )
-        
-        q2 = st.radio(
-            "Can deviations exist without crossing formal limits?",
-            ["No, all deviations tracked", "Sometimes noticed", "Yes, often unnoticed"],
-            key='q1_2'
-        )
-        
-        q3 = st.radio(
-            "Is escalation automatic or requires human decision?",
-            ["Automatic", "Requires decision", "Often doesn't happen"],
-            key='q1_3'
-        )
-        
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col2:
-            submitted = st.form_submit_button("Next →", use_container_width=True)
-        
-        if submitted:
+        q1 = st.radio("Are critical deviation thresholds mandatory and enforced, or discretionary?",
+            ["Yes, mandatory and enforced","Yes, but discretionary","No clear thresholds"], key='q1_1')
+        q2 = st.radio("Can deviations exist without crossing formal limits?",
+            ["No, all deviations tracked","Sometimes noticed","Yes, often unnoticed"], key='q1_2')
+        q3 = st.radio("Is escalation automatic or requires human decision?",
+            ["Automatic","Requires decision","Often doesn't happen"], key='q1_3')
+        if st.form_submit_button("Next →"):
             st.session_state.answers.update(st.session_state)
             st.session_state.scores['trigger_clarity'] = calculate_trigger_score(st.session_state.answers)
             st.session_state.step = 3
             st.rerun()
 
-# Шаг 3: Decision Ownership
 elif st.session_state.step == 3:
     st.markdown("""
     <div class="pillar-card">
@@ -397,35 +296,19 @@ elif st.session_state.step == 3:
         <p>Is accountability singular and real-time?</p>
     </div>
     """, unsafe_allow_html=True)
-    
     with st.form("ownership_form"):
-        q1 = st.radio(
-            "Is a single accountable owner defined for critical decisions?",
-            ["Yes, singular owner defined", "Shared but clear", "Collective/unclear"],
-            key='q2_1'
-        )
-        
-        q2 = st.radio(
-            "Is the owner operationally present during risk exposure?",
-            ["Yes, always present", "Usually present", "Rarely present"],
-            key='q2_2'
-        )
-        
-        q3 = st.radio(
-            "Can ownership be overridden collectively without traceability?",
-            ["No, never", "Sometimes", "Yes, commonly"],
-            key='q2_3'
-        )
-        
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col2:
-            if st.form_submit_button("Next →", use_container_width=True):
-                st.session_state.answers.update(st.session_state)
-                st.session_state.scores['decision_ownership'] = calculate_ownership_score(st.session_state.answers)
-                st.session_state.step = 4
-                st.rerun()
+        q1 = st.radio("Is a single accountable owner defined for critical decisions?",
+            ["Yes, singular owner defined","Shared but clear","Collective/unclear"], key='q2_1')
+        q2 = st.radio("Is the owner operationally present during risk exposure?",
+            ["Yes, always present","Usually present","Rarely present"], key='q2_2')
+        q3 = st.radio("Can ownership be overridden collectively without traceability?",
+            ["No, never","Sometimes","Yes, commonly"], key='q2_3')
+        if st.form_submit_button("Next →"):
+            st.session_state.answers.update(st.session_state)
+            st.session_state.scores['decision_ownership'] = calculate_ownership_score(st.session_state.answers)
+            st.session_state.step = 4
+            st.rerun()
 
-# Шаг 4: Protected Intervention
 elif st.session_state.step == 4:
     st.markdown("""
     <div class="pillar-card">
@@ -433,35 +316,19 @@ elif st.session_state.step == 4:
         <p>Is stopping operations structurally safe?</p>
     </div>
     """, unsafe_allow_html=True)
-    
     with st.form("intervention_form"):
-        q1 = st.radio(
-            "Is stop-work authority formally codified and protected?",
-            ["Yes, formally codified and protected", "Yes, but informally", "No"],
-            key='q3_1'
-        )
-        
-        q2 = st.radio(
-            "How are stop-work decisions reviewed?",
-            ["Always supported", "Usually supported", "Questioned/criticized"],
-            key='q3_2'
-        )
-        
-        q3 = st.radio(
-            "Does stopping operations negatively affect performance metrics?",
-            ["No, never", "Sometimes", "Yes, often"],
-            key='q3_3'
-        )
-        
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col2:
-            if st.form_submit_button("Next →", use_container_width=True):
-                st.session_state.answers.update(st.session_state)
-                st.session_state.scores['protected_intervention'] = calculate_intervention_score(st.session_state.answers)
-                st.session_state.step = 5
-                st.rerun()
+        q1 = st.radio("Is stop-work authority formally codified and protected?",
+            ["Yes, formally codified and protected","Yes, but informally","No"], key='q3_1')
+        q2 = st.radio("How are stop-work decisions reviewed?",
+            ["Always supported","Usually supported","Questioned/criticized"], key='q3_2')
+        q3 = st.radio("Does stopping operations negatively affect performance metrics?",
+            ["No, never","Sometimes","Yes, often"], key='q3_3')
+        if st.form_submit_button("Next →"):
+            st.session_state.answers.update(st.session_state)
+            st.session_state.scores['protected_intervention'] = calculate_intervention_score(st.session_state.answers)
+            st.session_state.step = 5
+            st.rerun()
 
-# Шаг 5: Override Transparency
 elif st.session_state.step == 5:
     st.markdown("""
     <div class="pillar-card">
@@ -469,35 +336,19 @@ elif st.session_state.step == 5:
         <p>Are deviations visible and traceable?</p>
     </div>
     """, unsafe_allow_html=True)
-    
     with st.form("override_form"):
-        q1 = st.radio(
-            "Can procedures be bypassed informally without documentation?",
-            ["No, always documented", "Sometimes documented", "Yes, commonly"],
-            key='q4_1'
-        )
-        
-        q2 = st.radio(
-            "Are overrides traceable to a named decision-maker?",
-            ["Yes, always", "Sometimes", "Rarely"],
-            key='q4_2'
-        )
-        
-        q3 = st.radio(
-            "Are overrides reviewed periodically?",
-            ["Yes, regularly", "Occasionally", "Never"],
-            key='q4_3'
-        )
-        
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col2:
-            if st.form_submit_button("Next →", use_container_width=True):
-                st.session_state.answers.update(st.session_state)
-                st.session_state.scores['override_transparency'] = calculate_override_score(st.session_state.answers)
-                st.session_state.step = 6
-                st.rerun()
+        q1 = st.radio("Can procedures be bypassed informally without documentation?",
+            ["No, always documented","Sometimes documented","Yes, commonly"], key='q4_1')
+        q2 = st.radio("Are overrides traceable to a named decision-maker?",
+            ["Yes, always","Sometimes","Rarely"], key='q4_2')
+        q3 = st.radio("Are overrides reviewed periodically?",
+            ["Yes, regularly","Occasionally","Never"], key='q4_3')
+        if st.form_submit_button("Next →"):
+            st.session_state.answers.update(st.session_state)
+            st.session_state.scores['override_transparency'] = calculate_override_score(st.session_state.answers)
+            st.session_state.step = 6
+            st.rerun()
 
-# Шаг 6: Drift Detection
 elif st.session_state.step == 6:
     st.markdown("""
     <div class="pillar-card">
@@ -505,163 +356,89 @@ elif st.session_state.step == 6:
         <p>Is boundary movement tracked or ignored?</p>
     </div>
     """, unsafe_allow_html=True)
-    
     with st.form("drift_form"):
-        q1 = st.radio(
-            "Are minor deviations recorded systematically?",
-            ["Yes, systematically", "Sometimes", "Rarely"],
-            key='q5_1'
-        )
-        
-        q2 = st.radio(
-            "Is deviation trend analyzed longitudinally?",
-            ["Yes, regularly", "Occasionally", "Never"],
-            key='q5_2'
-        )
-        
-        q3 = st.radio(
-            "Is normalization of deviation actively monitored?",
-            ["Yes, actively", "Sometimes", "No"],
-            key='q5_3'
-        )
-        
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col2:
-            if st.form_submit_button("Calculate Results →", use_container_width=True):
-                st.session_state.answers.update(st.session_state)
-                st.session_state.scores['drift_detection'] = calculate_drift_score(st.session_state.answers)
-                st.session_state.step = 7
-                st.rerun()
-
-# Шаг 7: Результаты
-elif st.session_state.step == 7:
-    total_score = sum(st.session_state.scores.values())
-    
-    # Определение классификации
-    if total_score <= 10:
-        classification = "HIGH STRUCTURAL VULNERABILITY"
-        color = "#dc2626"
-        message = "Your system shows significant structural weaknesses. Drift may already be normalized."
-    elif total_score <= 17:
-        classification = "CONDITIONAL STABILITY"
-        color = "#f59e0b"
-        message = "Some pillars are strong, but vulnerabilities exist. Focus on weakest areas."
-    elif total_score <= 22:
-        classification = "STRUCTURALLY CONTROLLED"
-        color = "#3b82f6"
-        message = "Good structural health. Targeted improvements will strengthen further."
-    else:
-        classification = "ARCHITECTURALLY RESILIENT"
-        color = "#10b981"
-        message = "Excellent structural integrity. Your system is designed to protect good decisions."
-    
-    # Заголовок
-    st.markdown(f"""
-    <div style="text-align: center; margin-bottom: 20px;">
-        <h1 style="color: #1e3a8a;">Your Structural Integrity Results</h1>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Общий скор
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.markdown(f"""
-        <div class="score-box" style="background-color: {color};">
-            {total_score} / 25
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown(f"""
-        <div style="text-align: center; padding: 15px; background-color: white; border-radius: 10px; margin-bottom: 20px;">
-            <h3 style="color: {color};">{classification}</h3>
-            <p>{message}</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Два столбца: график и детальные скоры
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("### Radar Chart")
-        fig = create_radar_chart(st.session_state.scores)
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col2:
-        st.markdown("### Pillar Scores")
-        
-        scores_df = pd.DataFrame({
-            'Pillar': ['Trigger Clarity', 'Decision Ownership', 'Protected Intervention', 
-                      'Override Transparency', 'Drift Detection'],
-            'Score': [
-                st.session_state.scores['trigger_clarity'],
-                st.session_state.scores['decision_ownership'],
-                st.session_state.scores['protected_intervention'],
-                st.session_state.scores['override_transparency'],
-                st.session_state.scores['drift_detection']
-            ]
-        })
-        
-        for idx, row in scores_df.iterrows():
-            st.markdown(f"""
-            <div style="margin-bottom: 10px;">
-                <div style="display: flex; justify-content: space-between;">
-                    <span><strong>{row['Pillar']}</strong></span>
-                    <span>{row['Score']}/5</span>
-                </div>
-                <div style="width: 100%; background-color: #e0e0e0; height: 10px; border-radius: 5px;">
-                    <div style="width: {(row['Score']/5)*100}%; background-color: #1e3a8a; height: 10px; border-radius: 5px;"></div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # Интерпретация
-    st.markdown("### Interpretation")
-    
-    weak_pillars = []
-    for pillar, score in st.session_state.scores.items():
-        if score <= 2:
-            weak_pillars.append(pillar.replace('_', ' ').title())
-    
-    if weak_pillars:
-        st.markdown(f"""
-        <div style="background-color: #fee2e2; padding: 15px; border-radius: 10px; border-left: 4px solid #dc2626;">
-            <strong>⚠️ Priority areas:</strong> Your weakest pillars are: {', '.join(weak_pillars)}. 
-            These represent the highest structural vulnerability.
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div style="background-color: #e6f7ff; padding: 15px; border-radius: 10px; margin-top: 10px;">
-        <strong>💡 Note:</strong> This diagnostic identifies structural conditions. A full SIM audit includes 
-        field interviews, document review, and detailed reinforcement planning.
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # Кнопки действий
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        # PDF Report
-        pdf_data = create_pdf(st.session_state.scores, total_score)
-        href = f'<a href="data:application/octet-stream;base64,{pdf_data}" download="AVCS_SIM_Report.pdf"><button style="background-color: #1e3a8a; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer;">📥 Download PDF Report</button></a>'
-        st.markdown(href, unsafe_allow_html=True)
-    
-    with col2:
-        if st.button("🔄 New Assessment", use_container_width=True):
-            for key in ['step', 'scores', 'answers']:
-                if key in st.session_state:
-                    del st.session_state[key]
+        q1 = st.radio("Are minor deviations recorded systematically?",
+            ["Yes, systematically","Sometimes","Rarely"], key='q5_1')
+        q2 = st.radio("Is deviation trend analyzed longitudinally?",
+            ["Yes, regularly","Occasionally","Never"], key='q5_2')
+        q3 = st.radio("Is normalization of deviation actively monitored?",
+            ["Yes, actively","Sometimes","No"], key='q5_3')
+        if st.form_submit_button("Calculate Results →"):
+            st.session_state.answers.update(st.session_state)
+            st.session_state.scores['drift_detection'] = calculate_drift_score(st.session_state.answers)
+            # После опроса спрашиваем имя и роль
+            st.session_state.step = 8
             st.rerun()
-    
-    with col3:
-        st.markdown("""
-        <a href="https://www.linkedin.com/in/yeruslan-chihachyov-70a807126" target="_blank">
-            <button style="background-color: #0a66c2; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
-            📞 Request Full Audit
-            </button>
-        </a>
-        """, unsafe_allow_html=True)
+
+# Шаг 8: сохранение респондента
+elif st.session_state.step == 8:
+    st.markdown("### Save Respondent")
+    with st.form("save_respondent_form"):
+        name_input = st.text_input("Name", value="", placeholder="e.g. John Smith")
+        role_input = st.selectbox("Role", ["Operator","Supervisor","HSE","Manager","Other"])
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.form_submit_button("Save and Add Another"):
+                if name_input and role_input:
+                    add_respondent(name_input, role_input, st.session_state.answers, st.session_state.scores)
+                    # Очищаем временные данные
+                    for key in ['step','answers','scores']:
+                        if key in st.session_state:
+                            del st.session_state[key]
+                    st.rerun()
+        with col2:
+            if st.form_submit_button("Save and Show Summary"):
+                if name_input and role_input:
+                    add_respondent(name_input, role_input, st.session_state.answers, st.session_state.scores)
+                    for key in ['step','answers','scores']:
+                        if key in st.session_state:
+                            del st.session_state[key]
+                    st.session_state.step = 1
+                    st.rerun()
+
+# Шаг 7: агрегированные результаты
+elif st.session_state.step == 7:
+    agg = get_aggregated_scores()
+    if not agg:
+        st.warning("No respondents yet. Add at least one respondent to see results.")
+        if st.button("← Back"):
+            st.session_state.step = 1
+            st.rerun()
+    else:
+        st.markdown("## Aggregated Results")
+        
+        total = get_consensus_score()
+        col1, col2, col3 = st.columns([1,2,1])
+        with col2:
+            st.markdown(f'<div class="score-box">{total:.1f} / 25</div>', unsafe_allow_html=True)
+        
+        # Показываем средние значения по каждому Pillar
+        colA, colB = st.columns(2)
+        with colA:
+            st.markdown("### Average Scores")
+            for pillar, vals in agg.items():
+                st.markdown(f"**{pillar.replace('_',' ').title()}:** {vals['avg']:.1f}/5  (min {vals['min']}–max {vals['max']})")
+        
+        with colB:
+            st.markdown("### Radar (Average)")
+            avg_scores = {k: v['avg'] for k,v in agg.items()}
+            fig = create_radar_chart(avg_scores)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # Показываем расхождения
+        disagreements = get_disagreement_areas()
+        if disagreements:
+            st.markdown("### ⚠️ Areas of Disagreement")
+            for d in disagreements:
+                st.markdown(f"**{d['pillar']}:** spread {d['spread']:.1f} points (min {d['min']}–max {d['max']})")
+        
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("← Back to Respondents"):
+                st.session_state.step = 1
+                st.rerun()
+        with col2:
+            pdf_data = create_pdf(avg_scores, total)
+            href = f'<a href="data:application/octet-stream;base64,{pdf_data}" download="AVCS_Aggregated_Report.pdf"><button style="background-color:#1e3a8a; color:white; padding:8px 16px;">📥 Download Aggregated PDF</button></a>'
+            st.markdown(href, unsafe_allow_html=True)
