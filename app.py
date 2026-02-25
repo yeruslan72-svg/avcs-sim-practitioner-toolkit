@@ -152,9 +152,15 @@ with st.sidebar:
         
         st.markdown("---")
         st.markdown("## Progress")
-        progress = (st.session_state.step - 1) / 6
-        st.progress(progress)
-        st.markdown(f"**Step {st.session_state.step} of 6**")
+step = st.session_state.step
+progress = (step - 1) / 6
+# Защита от выхода за пределы [0,1]
+if progress < 0:
+    progress = 0.0
+elif progress > 1:
+    progress = 1.0
+st.progress(progress)
+st.markdown(f"**Step {step} of 6**")
 
 # ------------------------------
 # Заголовок
