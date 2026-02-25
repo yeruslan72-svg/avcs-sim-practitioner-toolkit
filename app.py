@@ -14,6 +14,7 @@ from modules.interview_manager import (
     get_aggregated_scores, get_consensus_score, get_disagreement_areas
 )
 from modules.database import init_db, save_audit, get_audit_history, get_audit_by_id, delete_audit, get_company_list
+from modules.playbook_generator import generate_playbook, format_playbook_for_display, export_playbook_to_markdown
 
 # ------------------------------
 # Инициализация БД
@@ -64,6 +65,12 @@ if 'view_mode' not in st.session_state:
     st.session_state.view_mode = 'new'  # 'new' or 'history'
 if 'selected_audit' not in st.session_state:
     st.session_state.selected_audit = None
+if 'show_playbook' not in st.session_state:
+    st.session_state.show_playbook = False
+if 'last_aggregated' not in st.session_state:
+    st.session_state.last_aggregated = None
+if 'last_disagreements' not in st.session_state:
+    st.session_state.last_disagreements = None
 
 # ------------------------------
 # Стили CSS
@@ -94,6 +101,10 @@ st.markdown("""
     .audit-card:hover {
         background-color: #f0f2f6;
     }
+    .playbook-section {
+        background-color: #e8f0fe; padding: 20px; border-radius: 10px;
+        margin: 20px 0; border-left: 4px solid #1e3a8a;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -112,11 +123,13 @@ with st.sidebar:
     if st.button("➕ New Audit", use_container_width=True):
         st.session_state.view_mode = 'new'
         st.session_state.step = 1
+        st.session_state.show_playbook = False
         st.rerun()
     
     if st.button("📋 Audit History", use_container_width=True):
         st.session_state.view_mode = 'history'
         st.session_state.step = 1
+        st.session_state.show_playbook = False
         st.rerun()
     
     st.markdown("---")
@@ -272,6 +285,12 @@ def create_pdf(scores, total_score, company="", location=""):
         pdf.cell(0,10,f'{p}: {s:.1f}/5',0,1)
     pdf_output = pdf.output(dest='S').encode('latin1')
     return base64.b64encode(pdf_output).decode('latin1')
+
+def cls_from_score(score):
+    if score <= 10: return "HIGH STRUCTURAL VULNERABILITY"
+    elif score <= 17: return "CONDITIONAL STABILITY"
+    elif score <= 22: return "STRUCTURALLY CONTROLLED"
+    else: return "ARCHITECTURALLY RESILIENT"
 
 # ------------------------------
 # Страница истории аудитов
@@ -518,6 +537,10 @@ elif st.session_state.view_mode == 'new':
                 st.session_state.step = 1
                 st.rerun()
         else:
+            # Сохраняем данные для Playbook
+            st.session_state.last_aggregated = agg
+            st.session_state.last_disagreements = get_disagreement_areas()
+            
             st.markdown("## Aggregated Results")
             
             total = get_consensus_score()
@@ -544,6 +567,39 @@ elif st.session_state.view_mode == 'new':
                 st.markdown("### ⚠️ Areas of Disagreement")
                 for d in disagreements:
                     st.markdown(f"**{d['pillar']}:** spread {d['spread']:.1f} points (min {d['min']}–max {d['max']})")
+            
+            st.markdown("---")
+            
+            # Playbook секция
+            with st.expander("📋 Generate Action Playbook", expanded=not st.session_state.show_playbook):
+                col_p1, col_p2 = st.columns(2)
+                with col_p1:
+                    playbook_company = st.text_input("Company name for Playbook")
+                with col_p2:
+                    playbook_location = st.text_input("Location for Playbook")
+                
+                if st.button("🚀 Generate Playbook"):
+                    playbook = generate_playbook(
+                        aggregated_scores=agg,
+                        disagreements=disagreements,
+                        company_name=playbook_company,
+                        location=playbook_location
+                    )
+                    st.session_state.generated_playbook = playbook
+                    st.session_state.show_playbook = True
+                    st.rerun()
+            
+            if st.session_state.get('show_playbook') and st.session_state.get('generated_playbook'):
+                with st.container():
+                    st.markdown('<div class="playbook-section">', unsafe_allow_html=True)
+                    st.markdown(format_playbook_for_display(st.session_state.generated_playbook))
+                    
+                    # Кнопка для скачивания Playbook
+                    playbook_md = export_playbook_to_markdown(st.session_state.generated_playbook)
+                    b64 = base64.b64encode(playbook_md.encode()).decode()
+                    href = f'<a href="data:text/markdown;base64,{b64}" download="AVCS_Playbook_{playbook_company or "audit"}.md"><button style="background-color:#1e3a8a; color:white; padding:8px 16px; margin-top:10px;">📥 Download Playbook (Markdown)</button></a>'
+                    st.markdown(href, unsafe_allow_html=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
             
             st.markdown("---")
             
@@ -584,9 +640,3 @@ elif st.session_state.view_mode == 'new':
                 if st.button("➕ New Respondent"):
                     st.session_state.step = 2
                     st.rerun()
-
-def cls_from_score(score):
-    if score <= 10: return "HIGH STRUCTURAL VULNERABILITY"
-    elif score <= 17: return "CONDITIONAL STABILITY"
-    elif score <= 22: return "STRUCTURALLY CONTROLLED"
-    else: return "ARCHITECTURALLY RESILIENT"
