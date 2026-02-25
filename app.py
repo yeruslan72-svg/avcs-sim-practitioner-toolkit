@@ -13,6 +13,12 @@ from modules.interview_manager import (
     init_interview_state, add_respondent, update_respondent, delete_respondent,
     get_aggregated_scores, get_consensus_score, get_disagreement_areas
 )
+from modules.database import init_db, save_audit, get_audit_history, get_audit_by_id, delete_audit, get_company_list
+
+# ------------------------------
+# Инициализация БД
+# ------------------------------
+init_db()
 
 # ------------------------------
 # Проверка аутентификации
@@ -31,7 +37,7 @@ if authentication_status == None:
 # Конфигурация страницы
 # ------------------------------
 st.set_page_config(
-    page_title="AVCS Structural Integrity Module - Practitioner Toolkit",
+    page_title="AVCS SIM - Practitioner Toolkit",
     page_icon="🧭",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -54,6 +60,10 @@ if 'scores' not in st.session_state:
     }
 if 'answers' not in st.session_state:
     st.session_state.answers = {}
+if 'view_mode' not in st.session_state:
+    st.session_state.view_mode = 'new'  # 'new' or 'history'
+if 'selected_audit' not in st.session_state:
+    st.session_state.selected_audit = None
 
 # ------------------------------
 # Стили CSS
@@ -76,11 +86,14 @@ st.markdown("""
         border-radius: 10px; text-align: center; font-size: 48px;
         font-weight: bold; margin: 15px 0;
     }
-    .respondent-card {
-        background-color: #f0f2f6; padding: 15px; border-radius: 10px;
+    .audit-card {
+        background-color: white; padding: 15px; border-radius: 10px;
         margin-bottom: 10px; border-left: 4px solid #3b82f6;
+        cursor: pointer;
     }
-    .stButton button { background-color: #1e3a8a; color: white; }
+    .audit-card:hover {
+        background-color: #f0f2f6;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -94,36 +107,59 @@ with st.sidebar:
         authenticator.logout('Logout', 'main')
     
     st.markdown("---")
-    st.markdown(f"**Respondents:** {len(st.session_state.respondents)}")
     
-    if st.session_state.respondents:
-        st.markdown("### Respondent List")
-        for i, resp in enumerate(st.session_state.respondents):
-            with st.expander(f"{resp['role']}: {resp['name']}"):
-                st.write(f"Trigger: {resp['scores']['trigger_clarity']}/5")
-                st.write(f"Ownership: {resp['scores']['decision_ownership']}/5")
-                st.write(f"Intervention: {resp['scores']['protected_intervention']}/5")
-                st.write(f"Override: {resp['scores']['override_transparency']}/5")
-                st.write(f"Drift: {resp['scores']['drift_detection']}/5")
-                if st.button(f"Delete", key=f"del_{i}"):
-                    delete_respondent(i)
-                    st.rerun()
+    # Навигация
+    if st.button("➕ New Audit", use_container_width=True):
+        st.session_state.view_mode = 'new'
+        st.session_state.step = 1
+        st.rerun()
+    
+    if st.button("📋 Audit History", use_container_width=True):
+        st.session_state.view_mode = 'history'
+        st.session_state.step = 1
+        st.rerun()
     
     st.markdown("---")
-    st.markdown("## Progress")
-    progress = (st.session_state.step - 1) / 6
-    st.progress(progress)
-    st.markdown(f"**Step {st.session_state.step} of 6**")
+    
+    if st.session_state.view_mode == 'new':
+        st.markdown(f"**Respondents:** {len(st.session_state.respondents)}")
+        
+        if st.session_state.respondents:
+            st.markdown("### Respondent List")
+            for i, resp in enumerate(st.session_state.respondents):
+                with st.expander(f"{resp['role']}: {resp['name']}"):
+                    st.write(f"Trigger: {resp['scores']['trigger_clarity']}/5")
+                    st.write(f"Ownership: {resp['scores']['decision_ownership']}/5")
+                    st.write(f"Intervention: {resp['scores']['protected_intervention']}/5")
+                    st.write(f"Override: {resp['scores']['override_transparency']}/5")
+                    st.write(f"Drift: {resp['scores']['drift_detection']}/5")
+                    if st.button(f"Delete", key=f"del_{i}"):
+                        delete_respondent(i)
+                        st.rerun()
+        
+        st.markdown("---")
+        st.markdown("## Progress")
+        progress = (st.session_state.step - 1) / 6
+        st.progress(progress)
+        st.markdown(f"**Step {st.session_state.step} of 6**")
 
 # ------------------------------
 # Заголовок
 # ------------------------------
-st.markdown("""
-<div class="main-header">
-    <h1>🧭 AVCS Structural Integrity Module</h1>
-    <p>Practitioner Toolkit — Multi‑interview mode</p>
-</div>
-""", unsafe_allow_html=True)
+if st.session_state.view_mode == 'new':
+    st.markdown("""
+    <div class="main-header">
+        <h1>🧭 AVCS Structural Integrity Module</h1>
+        <p>Practitioner Toolkit — New Audit</p>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    st.markdown("""
+    <div class="main-header">
+        <h1>📋 Audit History</h1>
+        <p>View and manage past audits</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ------------------------------
 # Функции расчёта (без изменений)
@@ -198,7 +234,7 @@ def create_radar_chart(scores_dict):
 # ------------------------------
 # Функция для PDF
 # ------------------------------
-def create_pdf(scores, total_score):
+def create_pdf(scores, total_score, company="", location=""):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font('Arial','B',16)
@@ -209,9 +245,13 @@ def create_pdf(scores, total_score):
     pdf.ln(5)
     pdf.set_font('Arial','I',10)
     pdf.cell(0,10,f'Certified AVCS Practitioner: {name}',0,1,'L')
+    if company:
+        pdf.cell(0,10,f'Company: {company}',0,1,'L')
+    if location:
+        pdf.cell(0,10,f'Location: {location}',0,1,'L')
     pdf.ln(5)
     pdf.set_font('Arial','B',12)
-    pdf.cell(0,10,f'Total Structural Integrity Score: {total_score} / 25',0,1)
+    pdf.cell(0,10,f'Total Structural Integrity Score: {total_score:.1f} / 25',0,1)
     if total_score <= 10: cls = "HIGH STRUCTURAL VULNERABILITY"
     elif total_score <= 17: cls = "CONDITIONAL STABILITY"
     elif total_score <= 22: cls = "STRUCTURALLY CONTROLLED"
@@ -229,216 +269,324 @@ def create_pdf(scores, total_score):
         ('Drift Detection', scores['drift_detection'])
     ]
     for p,s in pillars:
-        pdf.cell(0,10,f'{p}: {s}/5',0,1)
+        pdf.cell(0,10,f'{p}: {s:.1f}/5',0,1)
     pdf_output = pdf.output(dest='S').encode('latin1')
     return base64.b64encode(pdf_output).decode('latin1')
 
 # ------------------------------
-# Основной интерфейс
+# Страница истории аудитов
 # ------------------------------
-
-# Если не в режиме редактирования и не на шаге опроса — показываем панель управления респондентами
-if not st.session_state.edit_mode and st.session_state.step == 1:
-    col1, col2 = st.columns([2,1])
-    with col1:
-        st.markdown("### Respondents")
-        if st.session_state.respondents:
-            for i, resp in enumerate(st.session_state.respondents):
-                with st.container():
-                    cols = st.columns([3,1,1])
-                    cols[0].markdown(f"**{resp['role']}:** {resp['name']}")
-                    cols[1].markdown(f"Score: {sum(resp['scores'].values())}/25")
-                    if cols[2].button("Edit", key=f"edit_{i}"):
-                        st.session_state.edit_mode = True
-                        st.session_state.edit_index = i
-                        st.session_state.step = 2
-                        st.rerun()
-        else:
-            st.info("No respondents yet. Add your first respondent below.")
-    
-    with col2:
-        st.markdown("### Actions")
-        if st.button("➕ New Respondent", use_container_width=True):
-            st.session_state.edit_mode = False
-            st.session_state.step = 2
-            st.rerun()
+if st.session_state.view_mode == 'history':
+    if st.session_state.selected_audit is None:
+        # Показываем список аудитов
+        col1, col2 = st.columns([2,1])
+        with col1:
+            st.markdown("### Past Audits")
+        with col2:
+            company_filter = st.selectbox("Filter by company", ["All"] + get_company_list())
         
-        if st.session_state.respondents:
-            if st.button("📊 Show Aggregated Results", use_container_width=True):
-                st.session_state.step = 7
+        df = get_audit_history(practitioner_name=name, limit=100)
+        
+        if len(df) == 0:
+            st.info("No audits found. Start by creating a new audit.")
+        else:
+            for _, row in df.iterrows():
+                with st.container():
+                    cols = st.columns([3,1,1,1])
+                    cols[0].markdown(f"**{row['audit_date']}** — {row['company_name'] or 'N/A'}")
+                    cols[1].markdown(f"Score: {row['total_score']:.1f}/25")
+                    cols[2].markdown(f"{row['classification']}")
+                    if cols[3].button("View", key=f"view_{row['id']}"):
+                        st.session_state.selected_audit = row['id']
+                        st.rerun()
+    else:
+        # Показываем детали выбранного аудита
+        audit = get_audit_by_id(st.session_state.selected_audit)
+        if audit:
+            st.markdown(f"## Audit from {audit['audit_date']}")
+            st.markdown(f"**Company:** {audit['company_name'] or 'N/A'}  |  **Location:** {audit['location'] or 'N/A'}")
+            st.markdown(f"**Practitioner:** {audit['practitioner_name']}")
+            
+            col1, col2, col3 = st.columns([1,2,1])
+            with col2:
+                st.markdown(f'<div class="score-box">{audit["total_score"]:.1f} / 25</div>', unsafe_allow_html=True)
+                st.markdown(f"### {audit['classification']}")
+            
+            colA, colB = st.columns(2)
+            with colA:
+                st.markdown("### Scores")
+                for pillar, score in audit['scores'].items():
+                    st.markdown(f"**{pillar.replace('_',' ').title()}:** {score:.1f}/5")
+            
+            with colB:
+                st.markdown("### Radar")
+                fig = create_radar_chart(audit['scores'])
+                st.plotly_chart(fig, use_container_width=True)
+            
+            st.markdown("### Respondents")
+            for r in audit['respondents']:
+                st.markdown(f"- **{r['role']}:** {r['name']}")
+            
+            colX, colY, colZ = st.columns(3)
+            with colX:
+                if st.button("← Back to List"):
+                    st.session_state.selected_audit = None
+                    st.rerun()
+            with colY:
+                pdf_data = create_pdf(audit['scores'], audit['total_score'], audit['company_name'], audit['location'])
+                href = f'<a href="data:application/octet-stream;base64,{pdf_data}" download="AVCS_Audit_{audit["id"]}.pdf"><button style="background-color:#1e3a8a; color:white; padding:8px 16px;">📥 Download PDF</button></a>'
+                st.markdown(href, unsafe_allow_html=True)
+            with colZ:
+                if st.button("🗑️ Delete", type="primary"):
+                    delete_audit(audit['id'])
+                    st.session_state.selected_audit = None
+                    st.rerun()
+        else:
+            st.error("Audit not found")
+            if st.button("← Back to List"):
+                st.session_state.selected_audit = None
                 st.rerun()
 
-# Шаги 2–6: опрос респондента (код из предыдущей версии, почти без изменений)
-elif st.session_state.step == 2:
-    st.markdown("""
-    <div class="pillar-card">
-        <h2>1. Trigger Clarity</h2>
-        <p>Are escalation conditions mandatory or interpretive?</p>
-    </div>
-    """, unsafe_allow_html=True)
-    with st.form("trigger_form"):
-        q1 = st.radio("Are critical deviation thresholds mandatory and enforced, or discretionary?",
-            ["Yes, mandatory and enforced","Yes, but discretionary","No clear thresholds"], key='q1_1')
-        q2 = st.radio("Can deviations exist without crossing formal limits?",
-            ["No, all deviations tracked","Sometimes noticed","Yes, often unnoticed"], key='q1_2')
-        q3 = st.radio("Is escalation automatic or requires human decision?",
-            ["Automatic","Requires decision","Often doesn't happen"], key='q1_3')
-        if st.form_submit_button("Next →"):
-            st.session_state.answers.update(st.session_state)
-            st.session_state.scores['trigger_clarity'] = calculate_trigger_score(st.session_state.answers)
-            st.session_state.step = 3
-            st.rerun()
-
-elif st.session_state.step == 3:
-    st.markdown("""
-    <div class="pillar-card">
-        <h2>2. Decision Ownership</h2>
-        <p>Is accountability singular and real-time?</p>
-    </div>
-    """, unsafe_allow_html=True)
-    with st.form("ownership_form"):
-        q1 = st.radio("Is a single accountable owner defined for critical decisions?",
-            ["Yes, singular owner defined","Shared but clear","Collective/unclear"], key='q2_1')
-        q2 = st.radio("Is the owner operationally present during risk exposure?",
-            ["Yes, always present","Usually present","Rarely present"], key='q2_2')
-        q3 = st.radio("Can ownership be overridden collectively without traceability?",
-            ["No, never","Sometimes","Yes, commonly"], key='q2_3')
-        if st.form_submit_button("Next →"):
-            st.session_state.answers.update(st.session_state)
-            st.session_state.scores['decision_ownership'] = calculate_ownership_score(st.session_state.answers)
-            st.session_state.step = 4
-            st.rerun()
-
-elif st.session_state.step == 4:
-    st.markdown("""
-    <div class="pillar-card">
-        <h2>3. Protected Intervention</h2>
-        <p>Is stopping operations structurally safe?</p>
-    </div>
-    """, unsafe_allow_html=True)
-    with st.form("intervention_form"):
-        q1 = st.radio("Is stop-work authority formally codified and protected?",
-            ["Yes, formally codified and protected","Yes, but informally","No"], key='q3_1')
-        q2 = st.radio("How are stop-work decisions reviewed?",
-            ["Always supported","Usually supported","Questioned/criticized"], key='q3_2')
-        q3 = st.radio("Does stopping operations negatively affect performance metrics?",
-            ["No, never","Sometimes","Yes, often"], key='q3_3')
-        if st.form_submit_button("Next →"):
-            st.session_state.answers.update(st.session_state)
-            st.session_state.scores['protected_intervention'] = calculate_intervention_score(st.session_state.answers)
-            st.session_state.step = 5
-            st.rerun()
-
-elif st.session_state.step == 5:
-    st.markdown("""
-    <div class="pillar-card">
-        <h2>4. Override Transparency</h2>
-        <p>Are deviations visible and traceable?</p>
-    </div>
-    """, unsafe_allow_html=True)
-    with st.form("override_form"):
-        q1 = st.radio("Can procedures be bypassed informally without documentation?",
-            ["No, always documented","Sometimes documented","Yes, commonly"], key='q4_1')
-        q2 = st.radio("Are overrides traceable to a named decision-maker?",
-            ["Yes, always","Sometimes","Rarely"], key='q4_2')
-        q3 = st.radio("Are overrides reviewed periodically?",
-            ["Yes, regularly","Occasionally","Never"], key='q4_3')
-        if st.form_submit_button("Next →"):
-            st.session_state.answers.update(st.session_state)
-            st.session_state.scores['override_transparency'] = calculate_override_score(st.session_state.answers)
-            st.session_state.step = 6
-            st.rerun()
-
-elif st.session_state.step == 6:
-    st.markdown("""
-    <div class="pillar-card">
-        <h2>5. Drift Detection</h2>
-        <p>Is boundary movement tracked or ignored?</p>
-    </div>
-    """, unsafe_allow_html=True)
-    with st.form("drift_form"):
-        q1 = st.radio("Are minor deviations recorded systematically?",
-            ["Yes, systematically","Sometimes","Rarely"], key='q5_1')
-        q2 = st.radio("Is deviation trend analyzed longitudinally?",
-            ["Yes, regularly","Occasionally","Never"], key='q5_2')
-        q3 = st.radio("Is normalization of deviation actively monitored?",
-            ["Yes, actively","Sometimes","No"], key='q5_3')
-        if st.form_submit_button("Calculate Results →"):
-            st.session_state.answers.update(st.session_state)
-            st.session_state.scores['drift_detection'] = calculate_drift_score(st.session_state.answers)
-            # После опроса спрашиваем имя и роль
-            st.session_state.step = 8
-            st.rerun()
-
-# Шаг 8: сохранение респондента
-elif st.session_state.step == 8:
-    st.markdown("### Save Respondent")
-    with st.form("save_respondent_form"):
-        name_input = st.text_input("Name", value="", placeholder="e.g. John Smith")
-        role_input = st.selectbox("Role", ["Operator","Supervisor","HSE","Manager","Other"])
-        col1, col2 = st.columns(2)
+# ------------------------------
+# Основной интерфейс нового аудита
+# ------------------------------
+elif st.session_state.view_mode == 'new':
+    
+    # Если не в режиме редактирования и не на шаге опроса — показываем панель управления респондентами
+    if not st.session_state.edit_mode and st.session_state.step == 1:
+        col1, col2 = st.columns([2,1])
         with col1:
-            if st.form_submit_button("Save and Add Another"):
-                if name_input and role_input:
-                    add_respondent(name_input, role_input, st.session_state.answers, st.session_state.scores)
-                    # Очищаем временные данные
-                    for key in ['step','answers','scores']:
-                        if key in st.session_state:
-                            del st.session_state[key]
-                    st.rerun()
+            st.markdown("### Respondents")
+            if st.session_state.respondents:
+                for i, resp in enumerate(st.session_state.respondents):
+                    with st.container():
+                        cols = st.columns([3,1,1])
+                        cols[0].markdown(f"**{resp['role']}:** {resp['name']}")
+                        cols[1].markdown(f"Score: {sum(resp['scores'].values())}/25")
+                        if cols[2].button("Edit", key=f"edit_{i}"):
+                            st.session_state.edit_mode = True
+                            st.session_state.edit_index = i
+                            st.session_state.step = 2
+                            st.rerun()
+            else:
+                st.info("No respondents yet. Add your first respondent below.")
+        
         with col2:
-            if st.form_submit_button("Save and Show Summary"):
-                if name_input and role_input:
-                    add_respondent(name_input, role_input, st.session_state.answers, st.session_state.scores)
-                    for key in ['step','answers','scores']:
-                        if key in st.session_state:
-                            del st.session_state[key]
-                    st.session_state.step = 1
+            st.markdown("### Actions")
+            if st.button("➕ New Respondent", use_container_width=True):
+                st.session_state.edit_mode = False
+                st.session_state.step = 2
+                st.rerun()
+            
+            if st.session_state.respondents:
+                if st.button("📊 Show Aggregated Results", use_container_width=True):
+                    st.session_state.step = 7
                     st.rerun()
 
-# Шаг 7: агрегированные результаты
-elif st.session_state.step == 7:
-    agg = get_aggregated_scores()
-    if not agg:
-        st.warning("No respondents yet. Add at least one respondent to see results.")
-        if st.button("← Back"):
-            st.session_state.step = 1
-            st.rerun()
-    else:
-        st.markdown("## Aggregated Results")
-        
-        total = get_consensus_score()
-        col1, col2, col3 = st.columns([1,2,1])
-        with col2:
-            st.markdown(f'<div class="score-box">{total:.1f} / 25</div>', unsafe_allow_html=True)
-        
-        # Показываем средние значения по каждому Pillar
-        colA, colB = st.columns(2)
-        with colA:
-            st.markdown("### Average Scores")
-            for pillar, vals in agg.items():
-                st.markdown(f"**{pillar.replace('_',' ').title()}:** {vals['avg']:.1f}/5  (min {vals['min']}–max {vals['max']})")
-        
-        with colB:
-            st.markdown("### Radar (Average)")
-            avg_scores = {k: v['avg'] for k,v in agg.items()}
-            fig = create_radar_chart(avg_scores)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        # Показываем расхождения
-        disagreements = get_disagreement_areas()
-        if disagreements:
-            st.markdown("### ⚠️ Areas of Disagreement")
-            for d in disagreements:
-                st.markdown(f"**{d['pillar']}:** spread {d['spread']:.1f} points (min {d['min']}–max {d['max']})")
-        
-        st.markdown("---")
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("← Back to Respondents"):
+    # Шаги 2–6: опрос респондента
+    elif st.session_state.step == 2:
+        st.markdown("""
+        <div class="pillar-card">
+            <h2>1. Trigger Clarity</h2>
+            <p>Are escalation conditions mandatory or interpretive?</p>
+        </div>
+        """, unsafe_allow_html=True)
+        with st.form("trigger_form"):
+            q1 = st.radio("Are critical deviation thresholds mandatory and enforced, or discretionary?",
+                ["Yes, mandatory and enforced","Yes, but discretionary","No clear thresholds"], key='q1_1')
+            q2 = st.radio("Can deviations exist without crossing formal limits?",
+                ["No, all deviations tracked","Sometimes noticed","Yes, often unnoticed"], key='q1_2')
+            q3 = st.radio("Is escalation automatic or requires human decision?",
+                ["Automatic","Requires decision","Often doesn't happen"], key='q1_3')
+            if st.form_submit_button("Next →"):
+                st.session_state.answers.update(st.session_state)
+                st.session_state.scores['trigger_clarity'] = calculate_trigger_score(st.session_state.answers)
+                st.session_state.step = 3
+                st.rerun()
+
+    elif st.session_state.step == 3:
+        st.markdown("""
+        <div class="pillar-card">
+            <h2>2. Decision Ownership</h2>
+            <p>Is accountability singular and real-time?</p>
+        </div>
+        """, unsafe_allow_html=True)
+        with st.form("ownership_form"):
+            q1 = st.radio("Is a single accountable owner defined for critical decisions?",
+                ["Yes, singular owner defined","Shared but clear","Collective/unclear"], key='q2_1')
+            q2 = st.radio("Is the owner operationally present during risk exposure?",
+                ["Yes, always present","Usually present","Rarely present"], key='q2_2')
+            q3 = st.radio("Can ownership be overridden collectively without traceability?",
+                ["No, never","Sometimes","Yes, commonly"], key='q2_3')
+            if st.form_submit_button("Next →"):
+                st.session_state.answers.update(st.session_state)
+                st.session_state.scores['decision_ownership'] = calculate_ownership_score(st.session_state.answers)
+                st.session_state.step = 4
+                st.rerun()
+
+    elif st.session_state.step == 4:
+        st.markdown("""
+        <div class="pillar-card">
+            <h2>3. Protected Intervention</h2>
+            <p>Is stopping operations structurally safe?</p>
+        </div>
+        """, unsafe_allow_html=True)
+        with st.form("intervention_form"):
+            q1 = st.radio("Is stop-work authority formally codified and protected?",
+                ["Yes, formally codified and protected","Yes, but informally","No"], key='q3_1')
+            q2 = st.radio("How are stop-work decisions reviewed?",
+                ["Always supported","Usually supported","Questioned/criticized"], key='q3_2')
+            q3 = st.radio("Does stopping operations negatively affect performance metrics?",
+                ["No, never","Sometimes","Yes, often"], key='q3_3')
+            if st.form_submit_button("Next →"):
+                st.session_state.answers.update(st.session_state)
+                st.session_state.scores['protected_intervention'] = calculate_intervention_score(st.session_state.answers)
+                st.session_state.step = 5
+                st.rerun()
+
+    elif st.session_state.step == 5:
+        st.markdown("""
+        <div class="pillar-card">
+            <h2>4. Override Transparency</h2>
+            <p>Are deviations visible and traceable?</p>
+        </div>
+        """, unsafe_allow_html=True)
+        with st.form("override_form"):
+            q1 = st.radio("Can procedures be bypassed informally without documentation?",
+                ["No, always documented","Sometimes documented","Yes, commonly"], key='q4_1')
+            q2 = st.radio("Are overrides traceable to a named decision-maker?",
+                ["Yes, always","Sometimes","Rarely"], key='q4_2')
+            q3 = st.radio("Are overrides reviewed periodically?",
+                ["Yes, regularly","Occasionally","Never"], key='q4_3')
+            if st.form_submit_button("Next →"):
+                st.session_state.answers.update(st.session_state)
+                st.session_state.scores['override_transparency'] = calculate_override_score(st.session_state.answers)
+                st.session_state.step = 6
+                st.rerun()
+
+    elif st.session_state.step == 6:
+        st.markdown("""
+        <div class="pillar-card">
+            <h2>5. Drift Detection</h2>
+            <p>Is boundary movement tracked or ignored?</p>
+        </div>
+        """, unsafe_allow_html=True)
+        with st.form("drift_form"):
+            q1 = st.radio("Are minor deviations recorded systematically?",
+                ["Yes, systematically","Sometimes","Rarely"], key='q5_1')
+            q2 = st.radio("Is deviation trend analyzed longitudinally?",
+                ["Yes, regularly","Occasionally","Never"], key='q5_2')
+            q3 = st.radio("Is normalization of deviation actively monitored?",
+                ["Yes, actively","Sometimes","No"], key='q5_3')
+            if st.form_submit_button("Calculate Results →"):
+                st.session_state.answers.update(st.session_state)
+                st.session_state.scores['drift_detection'] = calculate_drift_score(st.session_state.answers)
+                st.session_state.step = 8
+                st.rerun()
+
+    # Шаг 8: сохранение респондента
+    elif st.session_state.step == 8:
+        st.markdown("### Save Respondent")
+        with st.form("save_respondent_form"):
+            name_input = st.text_input("Name", value="", placeholder="e.g. John Smith")
+            role_input = st.selectbox("Role", ["Operator","Supervisor","HSE","Manager","Other"])
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.form_submit_button("Save and Add Another"):
+                    if name_input and role_input:
+                        add_respondent(name_input, role_input, st.session_state.answers, st.session_state.scores)
+                        for key in ['step','answers','scores']:
+                            if key in st.session_state:
+                                del st.session_state[key]
+                        st.rerun()
+            with col2:
+                if st.form_submit_button("Save and Show Summary"):
+                    if name_input and role_input:
+                        add_respondent(name_input, role_input, st.session_state.answers, st.session_state.scores)
+                        for key in ['step','answers','scores']:
+                            if key in st.session_state:
+                                del st.session_state[key]
+                        st.session_state.step = 1
+                        st.rerun()
+
+    # Шаг 7: агрегированные результаты
+    elif st.session_state.step == 7:
+        agg = get_aggregated_scores()
+        if not agg:
+            st.warning("No respondents yet. Add at least one respondent to see results.")
+            if st.button("← Back"):
                 st.session_state.step = 1
                 st.rerun()
-        with col2:
-            pdf_data = create_pdf(avg_scores, total)
-            href = f'<a href="data:application/octet-stream;base64,{pdf_data}" download="AVCS_Aggregated_Report.pdf"><button style="background-color:#1e3a8a; color:white; padding:8px 16px;">📥 Download Aggregated PDF</button></a>'
-            st.markdown(href, unsafe_allow_html=True)
+        else:
+            st.markdown("## Aggregated Results")
+            
+            total = get_consensus_score()
+            col1, col2, col3 = st.columns([1,2,1])
+            with col2:
+                st.markdown(f'<div class="score-box">{total:.1f} / 25</div>', unsafe_allow_html=True)
+            
+            # Показываем средние значения по каждому Pillar
+            colA, colB = st.columns(2)
+            with colA:
+                st.markdown("### Average Scores")
+                for pillar, vals in agg.items():
+                    st.markdown(f"**{pillar.replace('_',' ').title()}:** {vals['avg']:.1f}/5  (min {vals['min']}–max {vals['max']})")
+            
+            with colB:
+                st.markdown("### Radar (Average)")
+                avg_scores = {k: v['avg'] for k,v in agg.items()}
+                fig = create_radar_chart(avg_scores)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Показываем расхождения
+            disagreements = get_disagreement_areas()
+            if disagreements:
+                st.markdown("### ⚠️ Areas of Disagreement")
+                for d in disagreements:
+                    st.markdown(f"**{d['pillar']}:** spread {d['spread']:.1f} points (min {d['min']}–max {d['max']})")
+            
+            st.markdown("---")
+            
+            # Сохранение аудита
+            with st.expander("💾 Save this audit"):
+                col_c1, col_c2 = st.columns(2)
+                with col_c1:
+                    company_name = st.text_input("Company name (optional)")
+                with col_c2:
+                    location = st.text_input("Location (optional)")
+                
+                if st.button("Save Audit to History"):
+                    if company_name or location:
+                        audit_id = save_audit(
+                            practitioner_name=name,
+                            company_name=company_name,
+                            location=location,
+                            total_score=total,
+                            classification=cls_from_score(total),
+                            scores_dict=avg_scores,
+                            respondents_list=st.session_state.respondents
+                        )
+                        st.success(f"Audit saved! ID: {audit_id}")
+                    else:
+                        st.warning("Please enter at least company name or location")
+            
+            st.markdown("---")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button("← Back to Respondents"):
+                    st.session_state.step = 1
+                    st.rerun()
+            with col2:
+                pdf_data = create_pdf(avg_scores, total, company_name if 'company_name' in locals() else "", location if 'location' in locals() else "")
+                href = f'<a href="data:application/octet-stream;base64,{pdf_data}" download="AVCS_Aggregated_Report.pdf"><button style="background-color:#1e3a8a; color:white; padding:8px 16px;">📥 Download PDF</button></a>'
+                st.markdown(href, unsafe_allow_html=True)
+            with col3:
+                if st.button("➕ New Respondent"):
+                    st.session_state.step = 2
+                    st.rerun()
+
+def cls_from_score(score):
+    if score <= 10: return "HIGH STRUCTURAL VULNERABILITY"
+    elif score <= 17: return "CONDITIONAL STABILITY"
+    elif score <= 22: return "STRUCTURALLY CONTROLLED"
+    else: return "ARCHITECTURALLY RESILIENT"
