@@ -1,3 +1,4 @@
+import pandas as pd
 import streamlit as st
 
 def init_interview_state():
