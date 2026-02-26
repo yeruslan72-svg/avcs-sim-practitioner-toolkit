@@ -651,17 +651,25 @@ elif st.session_state.view_mode == 'new':
                     st.session_state.show_playbook = True
                     st.rerun()
             
-            if st.session_state.get('show_playbook') and st.session_state.get('generated_playbook'):
-                with st.container():
-                    st.markdown('<div class="playbook-section">', unsafe_allow_html=True)
-                    st.markdown(format_playbook_for_display(st.session_state.generated_playbook))
-                    
-                    # Кнопка для скачивания Playbook
-                    playbook_md = export_playbook_to_markdown(st.session_state.generated_playbook)
-                    b64 = base64.b64encode(playbook_md.encode()).decode()
-                    href = f'<a href="data:text/markdown;base64,{b64}" download="AVCS_Playbook_{playbook_company or "audit"}.md"><button style="background-color:#1e3a8a; color:white; padding:8px 16px; margin-top:10px;">📥 Download Playbook (Markdown)</button></a>'
-                    st.markdown(href, unsafe_allow_html=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
+           if st.session_state.get('show_playbook') and st.session_state.get('generated_playbook'):
+    with st.container():
+        st.markdown('<div class="playbook-section">', unsafe_allow_html=True)
+        st.markdown(format_playbook_for_display(st.session_state.generated_playbook))
+        
+        col_md, col_pdf = st.columns(2)
+        
+        with col_md:
+            # Кнопка для скачивания Playbook (Markdown)
+            playbook_md = export_playbook_to_markdown(st.session_state.generated_playbook)
+            b64_md = base64.b64encode(playbook_md.encode()).decode()
+            href_md = f'<a href="data:text/markdown;base64,{b64_md}" download="AVCS_Playbook_{playbook_company or "audit"}.md"><button style="background-color:#1e3a8a; color:white; padding:8px 16px;">📥 Markdown</button></a>'
+            st.markdown(href_md, unsafe_allow_html=True)
+        
+        with col_pdf:
+            # Здесь будет кнопка PDF (нужно добавить функцию)
+            st.button("📄 PDF (soon)", disabled=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
             
             st.markdown("---")
             
