@@ -152,15 +152,15 @@ with st.sidebar:
         
         st.markdown("---")
         st.markdown("## Progress")
-step = st.session_state.step
-progress = (step - 1) / 6
-# Защита от выхода за пределы [0,1]
-if progress < 0:
-    progress = 0.0
-elif progress > 1:
-    progress = 1.0
-st.progress(progress)
-st.markdown(f"**Step {step} of 6**")
+        step = st.session_state.step
+        progress = (step - 1) / 6
+        # Защита от выхода за пределы [0,1]
+        if progress < 0:
+            progress = 0.0
+        elif progress > 1:
+            progress = 1.0
+        st.progress(progress)
+        st.markdown(f"**Step {step} of 6**")
 
 # ------------------------------
 # Заголовок
@@ -181,7 +181,7 @@ else:
     """, unsafe_allow_html=True)
 
 # ------------------------------
-# Функции расчёта (без изменений)
+# Функции расчёта
 # ------------------------------
 def calculate_trigger_score(answers):
     score = 0
@@ -256,30 +256,52 @@ def create_radar_chart(scores_dict):
 def create_pdf(scores, total_score, company="", location=""):
     pdf = FPDF()
     pdf.add_page()
+    
+    # Добавляем логотип (фирменный бадж)
+    try:
+        pdf.image("logo.png", x=10, y=8, w=30)
+        pdf.ln(15)  # отступ после логотипа
+    except:
+        pdf.ln(10)  # если логотипа нет, просто отступ
+    
+    # Заголовок
     pdf.set_font('Arial','B',16)
     pdf.cell(0,10,'AVCS Structural Integrity Module Report',0,1,'C')
     pdf.ln(10)
+    
+    # Дата
     pdf.set_font('Arial','',10)
     pdf.cell(0,10,f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")}',0,1,'R')
     pdf.ln(5)
+    
+    # Информация о практикующем специалисте (с номером)
     pdf.set_font('Arial','I',10)
-    pdf.cell(0,10,f'Certified AVCS Practitioner: {name}',0,1,'L')
+    pdf.cell(0,10,f'Certified AVCS Practitioner: {name} (ID: #001)',0,1,'L')
     if company:
         pdf.cell(0,10,f'Company: {company}',0,1,'L')
     if location:
         pdf.cell(0,10,f'Location: {location}',0,1,'L')
     pdf.ln(5)
+    
+    # Общий скор
     pdf.set_font('Arial','B',12)
     pdf.cell(0,10,f'Total Structural Integrity Score: {total_score:.1f} / 25',0,1)
+    
+    # Классификация
     if total_score <= 10: cls = "HIGH STRUCTURAL VULNERABILITY"
     elif total_score <= 17: cls = "CONDITIONAL STABILITY"
     elif total_score <= 22: cls = "STRUCTURALLY CONTROLLED"
     else: cls = "ARCHITECTURALLY RESILIENT"
+    
+    pdf.set_font('Arial','B',12)
     pdf.cell(0,10,f'Classification: {cls}',0,1)
     pdf.ln(10)
+    
+    # Детальные скоры
     pdf.set_font('Arial','B',12)
     pdf.cell(0,10,'Pillar Scores:',0,1)
     pdf.set_font('Arial','',12)
+    
     pillars = [
         ('Trigger Clarity', scores['trigger_clarity']),
         ('Decision Ownership', scores['decision_ownership']),
@@ -287,8 +309,18 @@ def create_pdf(scores, total_score, company="", location=""):
         ('Override Transparency', scores['override_transparency']),
         ('Drift Detection', scores['drift_detection'])
     ]
+    
     for p,s in pillars:
         pdf.cell(0,10,f'{p}: {s:.1f}/5',0,1)
+    
+    pdf.ln(10)
+    
+    # Нижний колонтитул
+    pdf.set_y(-30)
+    pdf.set_font('Arial','I',8)
+    pdf.cell(0,10,'AVCS Structural Integrity Module',0,1,'C')
+    pdf.cell(0,10,'© 2026 Yeruslan Chihachyov, Operational Excellence Delivered Consulting',0,1,'C')
+    
     pdf_output = pdf.output(dest='S').encode('latin1')
     return base64.b64encode(pdf_output).decode('latin1')
 
@@ -584,7 +616,7 @@ elif st.session_state.view_mode == 'new':
             with col2:
                 st.markdown(f'<div class="score-box">{total:.1f} / 25</div>', unsafe_allow_html=True)
             
-            # Показываем средние значения по каждому Pillar
+            # Показываем средние значения и график
             colA, colB = st.columns(2)
             with colA:
                 st.markdown("### Average Scores")
@@ -639,40 +671,42 @@ elif st.session_state.view_mode == 'new':
             
             st.markdown("---")
             
-            # Сохранение аудита
-            with st.expander("💾 Save this audit"):
-                col_c1, col_c2 = st.columns(2)
-                with col_c1:
-                    company_name = st.text_input("Company name (optional)")
-                with col_c2:
-                    location = st.text_input("Location (optional)")
-                
-                if st.button("Save Audit to History"):
-                    if company_name or location:
-                        audit_id = save_audit(
-                            practitioner_name=name,
-                            company_name=company_name,
-                            location=location,
-                            total_score=total,
-                            classification=cls_from_score(total),
-                            scores_dict=avg_scores,
-                            respondents_list=st.session_state.respondents
-                        )
-                        st.success(f"Audit saved! ID: {audit_id}")
-                    else:
-                        st.warning("Please enter at least company name or location")
+            # Сохранение аудита и PDF
+            col_s1, col_s2, col_s3 = st.columns(3)
+            with col_s1:
+                with st.expander("💾 Save this audit"):
+                    company_name = st.text_input("Company name (optional)", key="save_company")
+                    location = st.text_input("Location (optional)", key="save_location")
+                    
+                    if st.button("Save Audit to History"):
+                        if company_name or location:
+                            audit_id = save_audit(
+                                practitioner_name=name,
+                                company_name=company_name,
+                                location=location,
+                                total_score=total,
+                                classification=cls_from_score(total),
+                                scores_dict=avg_scores,
+                                respondents_list=st.session_state.respondents
+                            )
+                            st.success(f"Audit saved! ID: {audit_id}")
+                        else:
+                            st.warning("Please enter at least company name or location")
             
-            st.markdown("---")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                if st.button("← Back to Respondents"):
-                    st.session_state.step = 1
-                    st.rerun()
-            with col2:
-                pdf_data = create_pdf(avg_scores, total, company_name if 'company_name' in locals() else "", location if 'location' in locals() else "")
-                href = f'<a href="data:application/octet-stream;base64,{pdf_data}" download="AVCS_Aggregated_Report.pdf"><button style="background-color:#1e3a8a; color:white; padding:8px 16px;">📥 Download PDF</button></a>'
+            with col_s2:
+                st.markdown("### Download PDF")
+                pdf_data = create_pdf(avg_scores, total, 
+                                     company_name if 'company_name' in locals() else "", 
+                                     location if 'location' in locals() else "")
+                href = f'<a href="data:application/octet-stream;base64,{pdf_data}" download="AVCS_Aggregated_Report.pdf"><button style="background-color:#1e3a8a; color:white; padding:8px 16px;">📥 Download PDF Report</button></a>'
                 st.markdown(href, unsafe_allow_html=True)
-            with col3:
-                if st.button("➕ New Respondent"):
+            
+            with col_s3:
+                if st.button("➕ Add Another Respondent"):
                     st.session_state.step = 2
                     st.rerun()
+            
+            st.markdown("---")
+            if st.button("← Back to Respondent List"):
+                st.session_state.step = 1
+                st.rerun()
