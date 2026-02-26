@@ -260,9 +260,9 @@ def create_pdf(scores, total_score, company="", location=""):
     # Добавляем логотип (фирменный бадж)
     try:
         pdf.image("logo.png", x=10, y=8, w=30)
-        pdf.ln(15)  # отступ после логотипа
+        pdf.ln(15)
     except:
-        pdf.ln(10)  # если логотипа нет, просто отступ
+        pdf.ln(10)
     
     # Заголовок
     pdf.set_font('Arial','B',16)
@@ -274,7 +274,7 @@ def create_pdf(scores, total_score, company="", location=""):
     pdf.cell(0,10,f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")}',0,1,'R')
     pdf.ln(5)
     
-    # Информация о практикующем специалисте (с номером)
+    # Информация о практикующем специалисте
     pdf.set_font('Arial','I',10)
     pdf.cell(0,10,f'Certified AVCS Practitioner: {name} (ID: #001)',0,1,'L')
     if company:
@@ -321,15 +321,9 @@ def create_pdf(scores, total_score, company="", location=""):
     pdf.cell(0,10,'AVCS Structural Integrity Module',0,1,'C')
     pdf.cell(0,10,'© 2026 Yeruslan Chihachyov, Operational Excellence Delivered Consulting',0,1,'C')
     
-    pdf_output = pdf.output(dest='S').encode('latin1')
-    return base64.b64encode(pdf_output).decode('latin1')
-
-def cls_from_score(score):
-    if score <= 10: return "HIGH STRUCTURAL VULNERABILITY"
-    elif score <= 17: return "CONDITIONAL STABILITY"
-    elif score <= 22: return "STRUCTURALLY CONTROLLED"
-    else: return "ARCHITECTURALLY RESILIENT"
-
+    # Получаем PDF как строку байтов
+    pdf_bytes = pdf.output()
+    return base64.b64encode(pdf_bytes).decode('utf-8')
 # ------------------------------
 # Страница истории аудитов
 # ------------------------------
