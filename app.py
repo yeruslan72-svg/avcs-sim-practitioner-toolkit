@@ -626,27 +626,20 @@ elif st.session_state.view_mode == 'new':
                     playbook_company = st.text_input("Company name for Playbook")
                 with col_p2:
                     playbook_location = st.text_input("Location for Playbook")
-        if st.button("🚀 Generate Playbook"):
-           try:
-         # Проверим, что передаём
-              st.write("Debug: agg =", agg)
-              st.write("Debug: disagreements =", disagreements)
-        
-              playbook = generate_playbook(
-                 aggregated_scores=agg,
-                 disagreements=disagreements,
-                 company_name=playbook_company,
-                 location=playbook_location
-              )
-             st.session_state.generated_playbook = playbook
-             st.session_state.show_playbook = True
-             st.rerun()
-         except Exception as e:
-             st.error(f"Error: {e}")
-        
-        st.session_state.generated_playbook = playbook
-        st.session_state.show_playbook = True
-        st.rerun()
+                
+                if st.button("🚀 Generate Playbook"):
+                    try:
+                        playbook = generate_playbook(
+                            aggregated_scores=agg,
+                            disagreements=disagreements,
+                            company_name=playbook_company,
+                            location=playbook_location
+                        )
+                        st.session_state.generated_playbook = playbook
+                        st.session_state.show_playbook = True
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error generating playbook: {e}")
             
             if st.session_state.get('show_playbook') and st.session_state.get('generated_playbook'):
                 with st.container():
@@ -668,26 +661,32 @@ elif st.session_state.view_mode == 'new':
                     
                     if st.button("Save Audit to History"):
                         if company_name or location:
-                            audit_id = save_audit(
-                                practitioner_name=name,
-                                company_name=company_name,
-                                location=location,
-                                total_score=total,
-                                classification=cls_from_score(total),
-                                scores_dict=avg_scores,
-                                respondents_list=st.session_state.respondents
-                            )
-                            st.success(f"Audit saved! ID: {audit_id}")
+                            try:
+                                audit_id = save_audit(
+                                    practitioner_name=name,
+                                    company_name=company_name,
+                                    location=location,
+                                    total_score=total,
+                                    classification=cls_from_score(total),
+                                    scores_dict=avg_scores,
+                                    respondents_list=st.session_state.respondents
+                                )
+                                st.success(f"Audit saved! ID: {audit_id}")
+                            except Exception as e:
+                                st.error(f"Error saving audit: {e}")
                         else:
                             st.warning("Please enter at least company name or location")
             
             with col_s2:
                 st.markdown("### Download PDF")
-                pdf_data = create_pdf(avg_scores, total, 
-                                     company_name if 'company_name' in locals() else "", 
-                                     location if 'location' in locals() else "")
-                href = f'<a href="data:application/octet-stream;base64,{pdf_data}" download="AVCS_Aggregated_Report.pdf"><button style="background-color:#1e3a8a; color:white; padding:8px 16px;">📥 Download PDF Report</button></a>'
-                st.markdown(href, unsafe_allow_html=True)
+                try:
+                    pdf_data = create_pdf(avg_scores, total, 
+                                         company_name if 'company_name' in locals() else "", 
+                                         location if 'location' in locals() else "")
+                    href = f'<a href="data:application/octet-stream;base64,{pdf_data}" download="AVCS_Aggregated_Report.pdf"><button style="background-color:#1e3a8a; color:white; padding:8px 16px;">📥 Download PDF Report</button></a>'
+                    st.markdown(href, unsafe_allow_html=True)
+                except Exception as e:
+                    st.error(f"Error generating PDF: {e}")
             
             with col_s3:
                 if st.button("➕ Add Another Respondent"):
