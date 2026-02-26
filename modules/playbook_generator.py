@@ -1,4 +1,3 @@
-import streamlit as st
 from datetime import datetime
 
 def generate_playbook(aggregated_scores, disagreements, company_name, location):
@@ -22,9 +21,8 @@ def generate_playbook(aggregated_scores, disagreements, company_name, location):
         'date': datetime.now().strftime("%Y-%m-%d"),
         'total_score': total_score,
         'priority_areas': [],
-        'quick_wins': [],
-        'structural_recommendations': [],
-        'disagreement_actions': []
+        'disagreement_actions': [],
+        'structural_recommendations': []
     }
     
     # Определяем приоритетные области (самые низкие средние оценки)
@@ -41,7 +39,7 @@ def generate_playbook(aggregated_scores, disagreements, company_name, location):
         playbook['priority_areas'].append({
             'pillar': pillar.replace('_', ' ').title(),
             'score': f"{score:.1f}/5",
-            'actions': get_actions_for_pillar(pillar, score)
+            'actions': _get_actions_for_pillar(pillar, score)
         })
     
     # Быстрые победы (области с большими расхождениями)
@@ -51,16 +49,16 @@ def generate_playbook(aggregated_scores, disagreements, company_name, location):
                 playbook['disagreement_actions'].append({
                     'pillar': d.get('pillar', 'Unknown'),
                     'spread': f"{d.get('spread', 0):.1f} points",
-                    'action': f"Conduct focused workshop with {d.get('min', 0)}-scoring and {d.get('max', 0)}-scoring respondents to align understanding"
+                    'action': _get_disagreement_action(d)
                 })
     
     # Общие структурные рекомендации
-    playbook['structural_recommendations'] = get_structural_recommendations(aggregated_scores)
+    playbook['structural_recommendations'] = _get_structural_recommendations(aggregated_scores)
     
     return playbook
 
-def get_actions_for_pillar(pillar, score):
-    """Возвращает конкретные действия для каждого Pillar в зависимости от оценки"""
+def _get_actions_for_pillar(pillar, score):
+    """Возвращает конкретные действия для каждого Pillar"""
     
     actions = {
         'trigger_clarity': [
@@ -100,21 +98,26 @@ def get_actions_for_pillar(pillar, score):
         ]
     }
     
-    # Возвращаем действия, адаптированные под уровень скора
     pillar_actions = actions.get(pillar, [])
     if score <= 1.5:
-        return pillar_actions  # Все действия
+        return pillar_actions
     elif score <= 2.5:
-        return pillar_actions[:3]  # Топ-3 действия
+        return pillar_actions[:3]
     else:
-        return pillar_actions[:2]  # Топ-2 действия
+        return pillar_actions[:2]
 
-def get_structural_recommendations(aggregated_scores):
+def _get_disagreement_action(disagreement):
+    """Формирует рекомендацию для области расхождения"""
+    pillar = disagreement.get('pillar', 'this area')
+    min_val = disagreement.get('min', 0)
+    max_val = disagreement.get('max', 0)
+    return f"Conduct focused workshop with {min_val}-scoring and {max_val}-scoring respondents to align understanding of {pillar.lower()}"
+
+def _get_structural_recommendations(aggregated_scores):
     """Возвращает общие структурные рекомендации"""
     
     recommendations = []
     
-    # Анализ по каждому Pillar, если данные есть
     if aggregated_scores:
         if aggregated_scores.get('trigger_clarity', {}).get('avg', 5) < 3:
             recommendations.append("Establish a formal 'Deviation Review Board' to analyze all threshold exceedances")
@@ -131,7 +134,6 @@ def get_structural_recommendations(aggregated_scores):
         if aggregated_scores.get('drift_detection', {}).get('avg', 5) < 3:
             recommendations.append("Establish a 'Drift Dashboard' showing trends in minor deviations over time")
     
-    # Добавляем общие рекомендации
     recommendations.append("Schedule a follow-up SIM assessment in 6 months to measure progress")
     recommendations.append("Share aggregated results with all respondents to close the feedback loop")
     
@@ -141,15 +143,15 @@ def format_playbook_for_display(playbook):
     """Форматирует playbook для отображения в Streamlit"""
     
     md = f"""
-    ## 📋 AVCS Structural Integrity Playbook
-    
-    **Company:** {playbook['company']}  
-    **Location:** {playbook['location']}  
-    **Date:** {playbook['date']}  
-    **Total Score:** {playbook['total_score']:.1f}/25
-    
-    ---
-    """
+## 📋 AVCS Structural Integrity Playbook
+
+**Company:** {playbook['company']}  
+**Location:** {playbook['location']}  
+**Date:** {playbook['date']}  
+**Total Score:** {playbook['total_score']:.1f}/25
+
+---
+"""
     
     if playbook['priority_areas']:
         md += "\n### 🔴 Priority Areas (Lowest Scores)\n"
