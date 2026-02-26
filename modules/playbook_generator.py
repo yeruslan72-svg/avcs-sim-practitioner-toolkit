@@ -5,11 +5,22 @@ def generate_playbook(aggregated_scores, disagreements, company_name, location):
     """
     Генерирует персонализированный план действий на основе результатов аудита.
     """
+    # Проверяем, что данные не None
+    if aggregated_scores is None:
+        aggregated_scores = {}
+    
+    # Безопасно получаем общий скор
+    total_score = 0
+    if aggregated_scores:
+        for pillar, vals in aggregated_scores.items():
+            if isinstance(vals, dict) and 'avg' in vals:
+                total_score += vals['avg']
+    
     playbook = {
         'company': company_name or "Unknown Company",
         'location': location or "Unknown Location",
         'date': datetime.now().strftime("%Y-%m-%d"),
-        'total_score': sum(v['avg'] for v in aggregated_scores.values()),
+        'total_score': total_score,
         'priority_areas': [],
         'quick_wins': [],
         'structural_recommendations': [],
@@ -18,9 +29,11 @@ def generate_playbook(aggregated_scores, disagreements, company_name, location):
     
     # Определяем приоритетные области (самые низкие средние оценки)
     low_scores = []
-    for pillar, vals in aggregated_scores.items():
-        if vals['avg'] <= 2.5:  # Низкий скор
-            low_scores.append((pillar, vals['avg']))
+    if aggregated_scores:
+        for pillar, vals in aggregated_scores.items():
+            if isinstance(vals, dict) and 'avg' in vals:
+                if vals['avg'] <= 2.5:
+                    low_scores.append((pillar, vals['avg']))
     
     low_scores.sort(key=lambda x: x[1])  # Сортируем от самых низких
     
@@ -32,12 +45,14 @@ def generate_playbook(aggregated_scores, disagreements, company_name, location):
         })
     
     # Быстрые победы (области с большими расхождениями)
-    for d in disagreements:
-        playbook['disagreement_actions'].append({
-            'pillar': d['pillar'],
-            'spread': f"{d['spread']:.1f} points",
-            'action': f"Conduct focused workshop with {d['min']}-scoring and {d['max']}-scoring respondents to align understanding of {d['pillar'].lower()}"
-        })
+    if disagreements:
+        for d in disagreements:
+            if isinstance(d, dict):
+                playbook['disagreement_actions'].append({
+                    'pillar': d.get('pillar', 'Unknown'),
+                    'spread': f"{d.get('spread', 0):.1f} points",
+                    'action': f"Conduct focused workshop with {d.get('min', 0)}-scoring and {d.get('max', 0)}-scoring respondents to align understanding"
+                })
     
     # Общие структурные рекомендации
     playbook['structural_recommendations'] = get_structural_recommendations(aggregated_scores)
@@ -99,21 +114,22 @@ def get_structural_recommendations(aggregated_scores):
     
     recommendations = []
     
-    # Анализ по каждому Pillar
-    if aggregated_scores['trigger_clarity']['avg'] < 3:
-        recommendations.append("Establish a formal 'Deviation Review Board' to analyze all threshold exceedances")
-    
-    if aggregated_scores['decision_ownership']['avg'] < 3:
-        recommendations.append("Create a Decision Rights Matrix (RAPID or similar) for all critical operations")
-    
-    if aggregated_scores['protected_intervention']['avg'] < 3:
-        recommendations.append("Implement a 'Safety Pause' program with guaranteed protection for those who stop work")
-    
-    if aggregated_scores['override_transparency']['avg'] < 3:
-        recommendations.append("Deploy a digital override tracking system with automated alerts to management")
-    
-    if aggregated_scores['drift_detection']['avg'] < 3:
-        recommendations.append("Establish a 'Drift Dashboard' showing trends in minor deviations over time")
+    # Анализ по каждому Pillar, если данные есть
+    if aggregated_scores:
+        if aggregated_scores.get('trigger_clarity', {}).get('avg', 5) < 3:
+            recommendations.append("Establish a formal 'Deviation Review Board' to analyze all threshold exceedances")
+        
+        if aggregated_scores.get('decision_ownership', {}).get('avg', 5) < 3:
+            recommendations.append("Create a Decision Rights Matrix (RAPID or similar) for all critical operations")
+        
+        if aggregated_scores.get('protected_intervention', {}).get('avg', 5) < 3:
+            recommendations.append("Implement a 'Safety Pause' program with guaranteed protection for those who stop work")
+        
+        if aggregated_scores.get('override_transparency', {}).get('avg', 5) < 3:
+            recommendations.append("Deploy a digital override tracking system with automated alerts to management")
+        
+        if aggregated_scores.get('drift_detection', {}).get('avg', 5) < 3:
+            recommendations.append("Establish a 'Drift Dashboard' showing trends in minor deviations over time")
     
     # Добавляем общие рекомендации
     recommendations.append("Schedule a follow-up SIM assessment in 6 months to measure progress")
