@@ -626,23 +626,23 @@ elif st.session_state.view_mode == 'new':
                     playbook_company = st.text_input("Company name for Playbook")
                 with col_p2:
                     playbook_location = st.text_input("Location for Playbook")
-                if st.button("🚀 Generate Playbook"):
-    try:
-        # Проверим, что передаём
-        st.write("Debug: agg =", agg)
-        st.write("Debug: disagreements =", disagreements)
+        if st.button("🚀 Generate Playbook"):
+           try:
+         # Проверим, что передаём
+              st.write("Debug: agg =", agg)
+              st.write("Debug: disagreements =", disagreements)
         
-        playbook = generate_playbook(
-            aggregated_scores=agg,
-            disagreements=disagreements,
-            company_name=playbook_company,
-            location=playbook_location
-        )
-        st.session_state.generated_playbook = playbook
-        st.session_state.show_playbook = True
-        st.rerun()
-    except Exception as e:
-        st.error(f"Error: {e}")
+              playbook = generate_playbook(
+                 aggregated_scores=agg,
+                 disagreements=disagreements,
+                 company_name=playbook_company,
+                 location=playbook_location
+              )
+             st.session_state.generated_playbook = playbook
+             st.session_state.show_playbook = True
+             st.rerun()
+         except Exception as e:
+             st.error(f"Error: {e}")
         
         st.session_state.generated_playbook = playbook
         st.session_state.show_playbook = True
