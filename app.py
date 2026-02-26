@@ -652,7 +652,7 @@ elif st.session_state.view_mode == 'new':
                     st.rerun()
             
            if st.session_state.get('show_playbook') and st.session_state.get('generated_playbook'):
-    with st.container():
+        with st.container():
         st.markdown('<div class="playbook-section">', unsafe_allow_html=True)
         st.markdown(format_playbook_for_display(st.session_state.generated_playbook))
         
