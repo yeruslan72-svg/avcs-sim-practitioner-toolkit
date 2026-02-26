@@ -154,7 +154,6 @@ with st.sidebar:
         st.markdown("## Progress")
         step = st.session_state.step
         progress = (step - 1) / 6
-        # Защита от выхода за пределы [0,1]
         if progress < 0:
             progress = 0.0
         elif progress > 1:
@@ -257,24 +256,20 @@ def create_pdf(scores, total_score, company="", location=""):
     pdf = FPDF()
     pdf.add_page()
     
-    # Добавляем логотип (фирменный бадж)
     try:
         pdf.image("logo.png", x=10, y=8, w=30)
         pdf.ln(15)
     except:
         pdf.ln(10)
     
-    # Заголовок
     pdf.set_font('Arial','B',16)
     pdf.cell(0,10,'AVCS Structural Integrity Module Report',0,1,'C')
     pdf.ln(10)
     
-    # Дата
     pdf.set_font('Arial','',10)
     pdf.cell(0,10,f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")}',0,1,'R')
     pdf.ln(5)
     
-    # Информация о практикующем специалисте
     pdf.set_font('Arial','I',10)
     pdf.cell(0,10,f'Certified AVCS Practitioner: {name} (ID: #001)',0,1,'L')
     if company:
@@ -283,11 +278,9 @@ def create_pdf(scores, total_score, company="", location=""):
         pdf.cell(0,10,f'Location: {location}',0,1,'L')
     pdf.ln(5)
     
-    # Общий скор
     pdf.set_font('Arial','B',12)
     pdf.cell(0,10,f'Total Structural Integrity Score: {total_score:.1f} / 25',0,1)
     
-    # Классификация
     if total_score <= 10: cls = "HIGH STRUCTURAL VULNERABILITY"
     elif total_score <= 17: cls = "CONDITIONAL STABILITY"
     elif total_score <= 22: cls = "STRUCTURALLY CONTROLLED"
@@ -297,7 +290,6 @@ def create_pdf(scores, total_score, company="", location=""):
     pdf.cell(0,10,f'Classification: {cls}',0,1)
     pdf.ln(10)
     
-    # Детальные скоры
     pdf.set_font('Arial','B',12)
     pdf.cell(0,10,'Pillar Scores:',0,1)
     pdf.set_font('Arial','',12)
@@ -315,21 +307,25 @@ def create_pdf(scores, total_score, company="", location=""):
     
     pdf.ln(10)
     
-    # Нижний колонтитул
     pdf.set_y(-30)
     pdf.set_font('Arial','I',8)
     pdf.cell(0,10,'AVCS Structural Integrity Module',0,1,'C')
     pdf.cell(0,10,'© 2026 Yeruslan Chihachyov, Operational Excellence Delivered Consulting',0,1,'C')
     
-    # Получаем PDF как строку байтов
     pdf_bytes = pdf.output()
     return base64.b64encode(pdf_bytes).decode('utf-8')
+
+def cls_from_score(score):
+    if score <= 10: return "HIGH STRUCTURAL VULNERABILITY"
+    elif score <= 17: return "CONDITIONAL STABILITY"
+    elif score <= 22: return "STRUCTURALLY CONTROLLED"
+    else: return "ARCHITECTURALLY RESILIENT"
+
 # ------------------------------
 # Страница истории аудитов
 # ------------------------------
 if st.session_state.view_mode == 'history':
     if st.session_state.selected_audit is None:
-        # Показываем список аудитов
         col1, col2 = st.columns([2,1])
         with col1:
             st.markdown("### Past Audits")
@@ -351,7 +347,6 @@ if st.session_state.view_mode == 'history':
                         st.session_state.selected_audit = row['id']
                         st.rerun()
     else:
-        # Показываем детали выбранного аудита
         audit = get_audit_by_id(st.session_state.selected_audit)
         if audit:
             st.markdown(f"## Audit from {audit['audit_date']}")
@@ -403,7 +398,6 @@ if st.session_state.view_mode == 'history':
 # ------------------------------
 elif st.session_state.view_mode == 'new':
     
-    # Если не в режиме редактирования и не на шаге опроса — показываем панель управления респондентами
     if not st.session_state.edit_mode and st.session_state.step == 1:
         col1, col2 = st.columns([2,1])
         with col1:
@@ -434,7 +428,6 @@ elif st.session_state.view_mode == 'new':
                     st.session_state.step = 7
                     st.rerun()
 
-    # Шаги 2–6: опрос респондента
     elif st.session_state.step == 2:
         st.markdown("""
         <div class="pillar-card">
@@ -565,7 +558,6 @@ elif st.session_state.view_mode == 'new':
                 st.session_state.step = 8
                 st.rerun()
 
-    # Шаг 8: сохранение респондента
     elif st.session_state.step == 8:
         st.markdown("### Save Respondent")
         with st.form("save_respondent_form"):
@@ -590,7 +582,6 @@ elif st.session_state.view_mode == 'new':
                         st.session_state.step = 1
                         st.rerun()
 
-    # Шаг 7: агрегированные результаты
     elif st.session_state.step == 7:
         agg = get_aggregated_scores()
         if not agg:
@@ -599,7 +590,6 @@ elif st.session_state.view_mode == 'new':
                 st.session_state.step = 1
                 st.rerun()
         else:
-            # Сохраняем данные для Playbook
             st.session_state.last_aggregated = agg
             st.session_state.last_disagreements = get_disagreement_areas()
             
@@ -610,7 +600,6 @@ elif st.session_state.view_mode == 'new':
             with col2:
                 st.markdown(f'<div class="score-box">{total:.1f} / 25</div>', unsafe_allow_html=True)
             
-            # Показываем средние значения и график
             colA, colB = st.columns(2)
             with colA:
                 st.markdown("### Average Scores")
@@ -623,7 +612,6 @@ elif st.session_state.view_mode == 'new':
                 fig = create_radar_chart(avg_scores)
                 st.plotly_chart(fig, use_container_width=True)
             
-            # Показываем расхождения
             disagreements = get_disagreement_areas()
             if disagreements:
                 st.markdown("### ⚠️ Areas of Disagreement")
@@ -632,7 +620,6 @@ elif st.session_state.view_mode == 'new':
             
             st.markdown("---")
             
-            # Playbook секция
             with st.expander("📋 Generate Action Playbook", expanded=not st.session_state.show_playbook):
                 col_p1, col_p2 = st.columns(2)
                 with col_p1:
@@ -651,29 +638,18 @@ elif st.session_state.view_mode == 'new':
                     st.session_state.show_playbook = True
                     st.rerun()
             
-        if st.session_state.get('show_playbook') and st.session_state.get('generated_playbook'):
-        with st.container():
-        st.markdown('<div class="playbook-section">', unsafe_allow_html=True)
-        st.markdown(format_playbook_for_display(st.session_state.generated_playbook))
-        
-        col_md, col_pdf = st.columns(2)
-        
-        with col_md:
-            # Кнопка для скачивания Playbook (Markdown)
-            playbook_md = export_playbook_to_markdown(st.session_state.generated_playbook)
-            b64_md = base64.b64encode(playbook_md.encode()).decode()
-            href_md = f'<a href="data:text/markdown;base64,{b64_md}" download="AVCS_Playbook_{playbook_company or "audit"}.md"><button style="background-color:#1e3a8a; color:white; padding:8px 16px;">📥 Markdown</button></a>'
-            st.markdown(href_md, unsafe_allow_html=True)
-        
-        with col_pdf:
-            # Здесь будет кнопка PDF (нужно добавить функцию)
-            st.button("📄 PDF (soon)", disabled=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+            if st.session_state.get('show_playbook') and st.session_state.get('generated_playbook'):
+                with st.container():
+                    st.markdown('<div class="playbook-section">', unsafe_allow_html=True)
+                    st.markdown(format_playbook_for_display(st.session_state.generated_playbook))
+                    playbook_md = export_playbook_to_markdown(st.session_state.generated_playbook)
+                    b64 = base64.b64encode(playbook_md.encode()).decode()
+                    href = f'<a href="data:text/markdown;base64,{b64}" download="AVCS_Playbook_{playbook_company or "audit"}.md"><button style="background-color:#1e3a8a; color:white; padding:8px 16px; margin-top:10px;">📥 Download Playbook (Markdown)</button></a>'
+                    st.markdown(href, unsafe_allow_html=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
             
             st.markdown("---")
             
-            # Сохранение аудита и PDF
             col_s1, col_s2, col_s3 = st.columns(3)
             with col_s1:
                 with st.expander("💾 Save this audit"):
