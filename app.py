@@ -643,10 +643,10 @@ elif st.session_state.view_mode == 'new':
         st.rerun()
     except Exception as e:
         st.error(f"Error: {e}")
-                    )
-                    st.session_state.generated_playbook = playbook
-                    st.session_state.show_playbook = True
-                    st.rerun()
+        )
+        st.session_state.generated_playbook = playbook
+        st.session_state.show_playbook = True
+        st.rerun()
             
             if st.session_state.get('show_playbook') and st.session_state.get('generated_playbook'):
                 with st.container():
