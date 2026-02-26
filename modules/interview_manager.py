@@ -13,7 +13,21 @@ def init_interview_state():
         st.session_state.edit_index = None
 
 def add_respondent(name, role, answers, scores):
-    """Добавить нового респондента"""
+    """Добавить нового респондента с защитой от ошибок"""
+    # Проверяем, что scores — это словарь
+    if scores is None or not isinstance(scores, dict):
+        scores = {
+            'trigger_clarity': 0,
+            'decision_ownership': 0,
+            'protected_intervention': 0,
+            'override_transparency': 0,
+            'drift_detection': 0
+        }
+    
+    # Проверяем, что answers — это словарь
+    if answers is None or not isinstance(answers, dict):
+        answers = {}
+    
     respondent = {
         'name': name,
         'role': role,
@@ -24,8 +38,22 @@ def add_respondent(name, role, answers, scores):
     st.session_state.respondents.append(respondent)
 
 def update_respondent(index, name, role, answers, scores):
-    """Обновить существующего респондента"""
+    """Обновить существующего респондента с защитой"""
     if 0 <= index < len(st.session_state.respondents):
+        # Проверяем, что scores — это словарь
+        if scores is None or not isinstance(scores, dict):
+            scores = {
+                'trigger_clarity': 0,
+                'decision_ownership': 0,
+                'protected_intervention': 0,
+                'override_transparency': 0,
+                'drift_detection': 0
+            }
+        
+        # Проверяем, что answers — это словарь
+        if answers is None or not isinstance(answers, dict):
+            answers = {}
+        
         st.session_state.respondents[index] = {
             'name': name,
             'role': role,
